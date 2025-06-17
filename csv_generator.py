@@ -1,16 +1,13 @@
-import csv, json
+import csv
 
 
-def generate_csv():
-    with open("mock.json", "r", encoding="utf-8") as f:
-        json_objects = json.load(f)
-
+def generate_csv(body):
     keys = ["Date", "Amount", "Category", "Title", "Note", "Account"]
 
     with open("gastos.csv", "w", newline="", encoding="utf-8") as csv_file:
         writer = csv.writer(csv_file)
         writer.writerow(keys)
-        for obj in json_objects:
+        for obj in body:
             writer.writerow(
                 [
                     obj["date"],

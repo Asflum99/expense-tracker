@@ -4,3 +4,4 @@
 mock.json
 *.pyc
 *.csv
+.vscode

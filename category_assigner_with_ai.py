@@ -1,5 +1,6 @@
 from groq import Groq
-import sqlite3, json, os
+from sqlite3 import Cursor, Connection
+import os
 
 
 def assign_category(obj) -> str:
@@ -10,22 +11,22 @@ def assign_category(obj) -> str:
     prompt = f"""
     Eres un experto en categorización de transacciones bancarias.
     Responde solo con una de las siguientes categorías:
-    - Comida
-    - Comestibles
-    - Compras
-    - Transporte
-    - Entretenimiento
-    - Facturas y tarifas
-    - Regalos
-    - Belleza
-    - Trabajo
-    - Viajes
-    - Ingreso
+    Comida
+    Comestibles
+    Compras
+    Transporte
+    Entretenimiento
+    Facturas y tarifas
+    Regalos
+    Belleza
+    Trabajo
+    Viajes
+    Ingreso
 
     Tu tarea es analizar esta transacción y devolver la categoría más apropiada.
     Transacción:
-    - Monto: {obj["amount"]}
-    - Beneficiario: {obj["beneficiary"]}
+    Monto: {obj["amount"]}
+    Beneficiario: {obj["beneficiary"]}
 
     Responde solo con una de las categorías listadas arriba.
     """
@@ -64,18 +65,9 @@ def obtain_category(cursor, obj) -> str:
         return category
 
 
-def process_movements():
-    conn = sqlite3.connect("db.sqlite")
-    cursor = conn.cursor()
-
-    with open("mock.json", "r", encoding="utf-8") as f:
-        json_objects = json.load(f)
-        for obj in json_objects:
-            category = obtain_category(cursor, obj)
-            obj["category"] = category
-
-    with open("mock.json", "w", encoding="utf-8") as f:
-        json.dump(json_objects, f, indent=4)
+def process_movements(conn: Connection, cursor: Cursor, body):
+    for obj in body:
+        category = obtain_category(cursor, obj)
+        obj["category"] = category
 
     conn.commit()
-    conn.close()

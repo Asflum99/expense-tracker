@@ -1,7 +1,10 @@
 backports.tarfile==1.2.0
+fastapi==0.115.13
 groq==0.28.0
 importlib-metadata==8.0.0
 jaraco.collections==5.1.0
 packaging==24.2
+pip-chill==1.0.3
 platformdirs==4.2.2
 tomli==2.0.1
+uvicorn==0.34.3

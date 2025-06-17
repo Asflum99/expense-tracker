@@ -1,7 +1,9 @@
 import sqlite3
+from sqlite3 import Connection, Cursor
+from typing import Tuple
 
 
-def db_initializer():
+def db_initializer() -> Tuple[Connection, Cursor]:
     """
     Initialize the database by creating the beneficiaries table
     if it doesn't exist.
@@ -24,4 +26,4 @@ def db_initializer():
     """
     )
     conn.commit()
-    conn.close()
+    return conn, cursor
