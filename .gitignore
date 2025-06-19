@@ -5,3 +5,28 @@ mock.json
 *.pyc
 *.csv
 .vscode
+
+# Android Studio
+fronted/*.iml
+fronted/.gradle
+fronted/local.properties
+fronted/.idea
+.DS_Store
+
+# Build
+fronted/build
+fronted/app/build
+
+# Logs
+*.log
+
+# OS-specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Kotlin specific
+*.class
+
+# Jetpack Compose previews
+.compose-cache
