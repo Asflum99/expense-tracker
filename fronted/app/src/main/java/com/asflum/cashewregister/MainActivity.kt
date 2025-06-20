@@ -1,12 +1,12 @@
 package com.asflum.cashewregister
 
-import android.app.AlertDialog
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.gms.auth.api.signin.*
 import com.google.android.gms.common.api.Scope
 import com.google.android.gms.common.api.ApiException
 import android.content.Intent
+import android.os.Environment
 import android.util.Log
 import android.widget.Button
 import com.google.android.gms.auth.GoogleAuthUtil
@@ -18,7 +18,16 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import android.util.Base64
-import java.util.Date
+import android.widget.Toast
+import com.google.gson.Gson
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.File
 
 @Suppress("DEPRECATION")
 class MainActivity : AppCompatActivity() {
@@ -94,7 +103,7 @@ class MainActivity : AppCompatActivity() {
                 val tomorrowStr = formatter.format(tomorrow.time)
 
                 // Armar query y URL
-                val query = "(from:notificaciones@yape.pe OR from:notificaciones@notificacionesbcp.com.pe) after:$todayStr before:$tomorrowStr"
+                val query = "(from:notificaciones@yape.pe) after:$todayStr before:$tomorrowStr"
                 val encodedQuery = URLEncoder.encode(query, "UTF-8")
                 val url = "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=$encodedQuery"
 
@@ -137,15 +146,26 @@ class MainActivity : AppCompatActivity() {
         if (response.isSuccessful) {
             val body = response.body?.string()
             val message = JSONObject(body ?: "")
-            readMessage(message)
+            val movementsList = readMessage(message)
+            sendJSON(client, movementsList)
         } else {
             Log.e("GMAIL_API", "Error ${response.code}: ${response.message}")
         }
     }
-    fun readMessage(message: JSONObject) {
+    fun readMessage(message: JSONObject): MutableList<MutableMap<String, String>> {
         val payload = message.getJSONObject("payload")
         val parts = payload.getJSONArray("parts")
+        val dataToSend = mutableListOf<MutableMap<String, String>>()
         for (i in 0 until parts.length()) {
+            val dictCreated = mutableMapOf<String, String>(
+                "date" to "",
+                "amount" to "",
+                "category" to "",
+                "title" to "",
+                "note" to "",
+                "beneficiary" to "",
+                "account" to ""
+            )
             val part = parts.getJSONObject(i)
             if (part.optString("mimeType") == "text/plain") {
                 val data = part.optJSONObject("body")?.optString("data")
@@ -155,8 +175,8 @@ class MainActivity : AppCompatActivity() {
                     val amountRegex = Regex("""\d+\.\d+""")
                     val dateRegex = Regex("""(\d{1,2}\s\w+\s\d{4})\s-\s(\d{2}:\d{2}\s[ap]\.\sm\.)""")
                     val beneficiaryRegex = Regex("""Nombre del Beneficiario\s+(.+)""")
-                    val amount = amountRegex.find(body)?.value
-                    val beneficiary = beneficiaryRegex.find(body)?.groups?.get(1)?.value
+                    val amount = amountRegex.find(body)?.value ?: "Monto desconocido"
+                    val beneficiary = beneficiaryRegex.find(body)?.groups?.get(1)?.value ?: "Beneficiario desconocido"
 
                     // Convertir fecha a formato requerido por Cashew
                     val dateDate = dateRegex.find(body)?.groups?.get(1)?.value ?: "Fecha desconocida"
@@ -167,15 +187,61 @@ class MainActivity : AppCompatActivity() {
 
                     // Convertir hora a formato requerido por Cashew
                     val dateTime = dateRegex.find(body)?.groups?.get(2)?.value ?: "Hora desconocida"
-                    val inputTime = SimpleDateFormat("hh:mma", Locale("es", "PE"))
                     val originalTime = dateTime.replace(".", "").replace("a m", "AM").replace("p m", "PM")
+                    val inputTime = SimpleDateFormat("hh:mm a", Locale.US)
                     val outputTime = SimpleDateFormat("hh:mm", Locale.getDefault())
                     val parsedTime = inputTime.parse(originalTime) ?: "Hora desconocida"
                     val timeFormated = outputTime.format(parsedTime)
 
-                    Log.d("VALUES", "Monto: -${amount}. Fecha: ${dateFormated}. Hora: ${timeFormated}. Beneficiario: ${beneficiary}.")
+                    dictCreated["date"] = "$dateFormated $timeFormated"
+                    dictCreated["amount"] = "-$amount"
+                    dictCreated["beneficiary"] = beneficiary
+
+                    dataToSend.add(dictCreated)
                 }
             }
         }
+        return dataToSend
+    }
+    fun sendJSON(client: OkHttpClient, movementsList: MutableList<MutableMap<String, String>>) {
+        val gson = Gson()
+        val jsonString = gson.toJson(movementsList)
+        val requestBody = jsonString.toRequestBody("application/json".toMediaType())
+
+        val request = Request.Builder()
+            .url("https://5810-2001-1388-1760-9db6-2a18-8168-7dc7-3d8b.ngrok-free.app/process-expenses")
+            .post(requestBody)
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "Falló al descargar el archivo", Toast.LENGTH_SHORT).show()
+                }
+            }
+            override fun onResponse(call: Call, response: Response) {
+                val inputStream = response.body?.byteStream() ?: return
+                val fileName = "test_gastos1.csv"
+
+                // Ruta a la carpeta Descargas
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val outputFile = File(downloadsDir, fileName)
+
+                try {
+                    val outputStream = FileOutputStream(outputFile)
+                    inputStream.copyTo(outputStream)
+                    outputStream.close()
+                    inputStream.close()
+
+                    Log.d("CSV", "Archivo guardado en: ${outputFile.absolutePath}")
+
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "Se descargó el archivo CSV", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                }
+            }
+        })
     }
 }
