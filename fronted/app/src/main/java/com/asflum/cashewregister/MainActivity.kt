@@ -25,9 +25,11 @@ import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONArray
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.File
+import java.util.TimeZone
 
 @Suppress("DEPRECATION")
 class MainActivity : AppCompatActivity() {
@@ -94,16 +96,26 @@ class MainActivity : AppCompatActivity() {
             try {
                 val token = GoogleAuthUtil.getToken(this@MainActivity, googleAccount, scope)
 
-                // Armar fecha
-                val formatter = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
-                val today = Calendar.getInstance()
-                val tomorrow = Calendar.getInstance().apply { add(Calendar.DATE, 1) }
+                // Establecer zona horario de Lima
+                val limaZone = TimeZone.getTimeZone("America/Lima")
 
-                val todayStr = formatter.format(today.time)
-                val tomorrowStr = formatter.format(tomorrow.time)
+                // Armar fecha
+                val today = Calendar.getInstance(limaZone).apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                val tomorrow = Calendar.getInstance(limaZone).apply {
+                    time = today.time
+                    add(Calendar.DATE, 1)
+                }
+
+                val after = today.timeInMillis / 1000
+                val before = tomorrow.timeInMillis / 1000
 
                 // Armar query y URL
-                val query = "(from:notificaciones@yape.pe) after:$todayStr before:$tomorrowStr"
+                val query = "(from:notificaciones@yape.pe) after:$after before:$before"
                 val encodedQuery = URLEncoder.encode(query, "UTF-8")
                 val url = "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=$encodedQuery"
 
@@ -129,43 +141,51 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
     fun accessMessage(token: String, client: OkHttpClient, message: JSONObject) {
-        // Extrar id del mensaje
+        // Extraer todos los correos del día
         val messages = message.optJSONArray("messages")
-        val messageItem = messages?.getJSONObject(0)
-        val messageId = messageItem?.getString("id")
-        // Armar url
-        val url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/$messageId"
-        // Hacer request
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Authorization", "Bearer $token")
-            .build()
 
-        val response = client.newCall(request).execute()
+        // Iterar sobre cada correo
+        if (messages != null) {
+            val movementsList: MutableList<MutableMap<String, String>> = mutableListOf()
+            for (i in 0 until messages.length()) {
+                val messageItem = messages.getJSONObject(i)
+                val messageId = messageItem.getString("id")
 
-        if (response.isSuccessful) {
-            val body = response.body?.string()
-            val message = JSONObject(body ?: "")
-            val movementsList = readMessage(message)
+                // Armar url
+                val url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/$messageId"
+
+                // Hacer request
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer $token")
+                    .build()
+
+                val response = client.newCall(request).execute()
+
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    val message = JSONObject(body ?: "")
+                    movementsList.add(readMessage(message))
+                } else {
+                    Log.e("GMAIL_API", "Error ${response.code}: ${response.message}")
+                }
+            }
             sendJSON(client, movementsList)
-        } else {
-            Log.e("GMAIL_API", "Error ${response.code}: ${response.message}")
         }
     }
-    fun readMessage(message: JSONObject): MutableList<MutableMap<String, String>> {
+    fun readMessage(message: JSONObject): MutableMap<String, String> {
         val payload = message.getJSONObject("payload")
         val parts = payload.getJSONArray("parts")
-        val dataToSend = mutableListOf<MutableMap<String, String>>()
+        val dataToSend = mutableMapOf<String, String>(
+            "date" to "",
+            "amount" to "",
+            "category" to "",
+            "title" to "",
+            "note" to "",
+            "beneficiary" to "",
+            "account" to ""
+        )
         for (i in 0 until parts.length()) {
-            val dictCreated = mutableMapOf<String, String>(
-                "date" to "",
-                "amount" to "",
-                "category" to "",
-                "title" to "",
-                "note" to "",
-                "beneficiary" to "",
-                "account" to ""
-            )
             val part = parts.getJSONObject(i)
             if (part.optString("mimeType") == "text/plain") {
                 val data = part.optJSONObject("body")?.optString("data")
@@ -189,15 +209,13 @@ class MainActivity : AppCompatActivity() {
                     val dateTime = dateRegex.find(body)?.groups?.get(2)?.value ?: "Hora desconocida"
                     val originalTime = dateTime.replace(".", "").replace("a m", "AM").replace("p m", "PM")
                     val inputTime = SimpleDateFormat("hh:mm a", Locale.US)
-                    val outputTime = SimpleDateFormat("hh:mm", Locale.getDefault())
+                    val outputTime = SimpleDateFormat("HH:mm", Locale.getDefault())
                     val parsedTime = inputTime.parse(originalTime) ?: "Hora desconocida"
                     val timeFormated = outputTime.format(parsedTime)
 
-                    dictCreated["date"] = "$dateFormated $timeFormated"
-                    dictCreated["amount"] = "-$amount"
-                    dictCreated["beneficiary"] = beneficiary
-
-                    dataToSend.add(dictCreated)
+                    dataToSend["date"] = "$dateFormated $timeFormated"
+                    dataToSend["amount"] = "-$amount"
+                    dataToSend["beneficiary"] = beneficiary
                 }
             }
         }
@@ -209,7 +227,7 @@ class MainActivity : AppCompatActivity() {
         val requestBody = jsonString.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("https://5810-2001-1388-1760-9db6-2a18-8168-7dc7-3d8b.ngrok-free.app/process-expenses")
+            .url("https://5e04-2001-1388-1760-9db6-82b2-6c7c-599a-1700.ngrok-free.app/process-expenses")
             .post(requestBody)
             .build()
 
@@ -221,7 +239,12 @@ class MainActivity : AppCompatActivity() {
             }
             override fun onResponse(call: Call, response: Response) {
                 val inputStream = response.body?.byteStream() ?: return
-                val fileName = "test_gastos1.csv"
+                val limaZone = TimeZone.getTimeZone("America/Lima")
+                val today = Calendar.getInstance(limaZone)
+                val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                formatter.timeZone = limaZone
+                val formattedDate = formatter.format(today.time)
+                val fileName = "test_gastos_$formattedDate.csv"
 
                 // Ruta a la carpeta Descargas
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
