@@ -1,13 +1,9 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
-
-val gmailClientId: String = project.rootProject.file("local.properties")
-    .reader().useLines { lines ->
-        lines.first { it.startsWith("GMAIL_CLIENT_ID=") }
-            .split("=")[1]
-    }
 
 android {
     namespace = "com.asflum.cashewregister"
@@ -19,7 +15,25 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1"
-        buildConfigField("String", "GMAIL_CLIENT_ID", "\"$gmailClientId\"")
+
+        // Load values from apikeys.properties
+        val apiKeysFile = project.rootProject.file("apikeys.properties")
+        val properties = Properties()
+        properties.load(apiKeysFile.inputStream())
+
+        // Return empty key in case something goes wrong
+        val webClientId = properties.getProperty("WEB_CLIENT_ID") ?: ""
+        buildConfigField(
+            "String",
+            "WEB_CLIENT_ID",
+            webClientId
+        )
+        val gmailClientId = properties.getProperty("GMAIL_CLIENT_ID") ?: ""
+        buildConfigField(
+            "String",
+            "GMAIL_CLIENT_ID",
+            gmailClientId
+        )
     }
 
     buildFeatures {
@@ -38,8 +52,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
     packaging {
@@ -54,10 +70,13 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
-    implementation("com.google.api-client:google-api-client-android:1.35.0")
-    implementation("com.google.oauth-client:google-oauth-client-jetty:1.35.0")
+    implementation("com.google.api-client:google-api-client-android:2.8.0")
+    implementation("com.google.oauth-client:google-oauth-client-jetty:1.39.0")
     implementation("com.google.apis:google-api-services-gmail:v1-rev110-1.25.0")
     implementation("com.google.android.gms:play-services-auth:21.3.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.google.code.gson:gson:2.11.0")
+    implementation("com.squareup.okhttp3:okhttp:5.1.0")
+    implementation("com.google.code.gson:gson:2.13.1")
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid")
 }

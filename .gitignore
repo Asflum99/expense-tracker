@@ -12,6 +12,7 @@ fronted/.gradle
 fronted/local.properties
 fronted/.idea
 .DS_Store
+apikeys.properties
 
 # Build
 fronted/build

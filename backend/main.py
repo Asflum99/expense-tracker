@@ -1,12 +1,15 @@
 from db_initializer import db_initializer
 from category_assigner_with_ai import process_movements
 from csv_generator import generate_csv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
+from google.oauth2 import id_token
+from google.auth.transport import requests
 import os
 
 app = FastAPI()
+
 
 @app.post("/process-expenses")
 async def process_expenses(request: Request):
@@ -28,7 +31,27 @@ async def process_expenses(request: Request):
 
     background_task = BackgroundTask(remove_file)
 
-    response = StreamingResponse(file_stream, media_type="text/csv", background=background_task)
+    response = StreamingResponse(
+        file_stream, media_type="text/csv", background=background_task
+    )
     response.headers["Content-Disposition"] = "attachment; filename=gastos.csv"
 
     return response
+
+
+@app.post("/users/auth/google")
+async def google_auth(request: Request):
+    body = await request.json()
+    token = body.get("idToken")
+
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing idToken")
+
+    try:
+        CLIENT_ID = os.environ.get("CLIENT_ID")
+        idinfo = id_token.verify_oauth2_token(token, requests.Request(), CLIENT_ID)
+        userid = idinfo["sub"]
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    return {"userid": userid}
