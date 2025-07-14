@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.asflum.cashewregister"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.asflum.cashewregister"
@@ -26,13 +26,7 @@ android {
         buildConfigField(
             "String",
             "WEB_CLIENT_ID",
-            webClientId
-        )
-        val gmailClientId = properties.getProperty("GMAIL_CLIENT_ID") ?: ""
-        buildConfigField(
-            "String",
-            "GMAIL_CLIENT_ID",
-            gmailClientId
+            "\"$webClientId\""
         )
     }
 
@@ -79,4 +73,7 @@ dependencies {
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("com.google.android.libraries.identity.googleid:googleid")
+    implementation("com.google.apis:google-api-services-gmail:v1-rev20220404-2.0.0")
+    implementation("com.google.http-client:google-http-client-gson:1.47.1")
+    implementation("com.google.http-client:google-http-client-android:1.47.1")
 }

@@ -2,18 +2,12 @@ package com.asflum.cashewregister
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.gms.auth.api.signin.*
-import com.google.android.gms.common.api.Scope
-import com.google.android.gms.common.api.ApiException
-import android.content.Intent
 import android.os.Environment
 import android.util.Log
 import android.widget.Button
-import com.google.android.gms.auth.GoogleAuthUtil
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -33,22 +27,19 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialResponse
-import androidx.credentials.PasswordCredential
-import androidx.credentials.PublicKeyCredential
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.lifecycleScope
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier
-import com.google.gson.JsonObject
 import kotlinx.coroutines.launch
-import okhttp3.MediaType
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.core.content.edit
+import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
+import com.google.api.client.http.javanet.NetHttpTransport
+import com.google.api.client.json.gson.GsonFactory
+import com.google.api.services.gmail.Gmail
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
 class MainActivity : AppCompatActivity() {
@@ -57,11 +48,15 @@ class MainActivity : AppCompatActivity() {
         private val TAG = MainActivity::class.simpleName
     }
 
-    private val gmailScope = Scope("https://www.googleapis.com/auth/gmail.readonly")
+    private val gmailScope = listOf(
+        "https://www.googleapis.com/auth/gmail.readonly"
+    )
 
     private val webClientId = BuildConfig.WEB_CLIENT_ID
 
     private val client = OkHttpClient()
+    private var gmailService: Gmail? = null
+    private var userEmail: String = ""
 
     private val googleIdOption: GetGoogleIdOption = GetGoogleIdOption.Builder()
         .setFilterByAuthorizedAccounts(true)
@@ -90,6 +85,7 @@ class MainActivity : AppCompatActivity() {
                         context = this@MainActivity
                     )
                     handleSignIn(result)
+                    continueWithGmailAccess()
                 } catch (e: GetCredentialException) {
                     handleFailure(e)
                 }
@@ -114,10 +110,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleGoogleCredential(credential: CustomCredential) {
+        fun saveUserEmail(email: String) {
+            getSharedPreferences("user", MODE_PRIVATE).edit {
+                putString("userEmail", email)
+            }
+        }
+
         if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
             try {
                 val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                 val idToken = googleIdTokenCredential.idToken
+                userEmail = googleIdTokenCredential.id
+                saveUserEmail(userEmail)
                 sendTokenToBackend(idToken)
             } catch (e: GoogleIdTokenParsingException) {
                 Log.e(TAG, "ID Token invalid", e)
@@ -128,31 +132,52 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendTokenToBackend(idToken: String) {
-        val requestBody = """
+        fun saveUserId(userId: String) {
+            getSharedPreferences("user", MODE_PRIVATE).edit {
+                putString("userId", userId)
+            }
+        }
+
+        val jsonString = """
             {
                 "id_token": "$idToken"
             }
-        """.trimIndent().toRequestBody("application/json".toMediaType())
+        """.trimIndent()
+
+        val requestBody = jsonString.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("https://5e04-2001-1388-1760-9db6-82b2-6c7c-599a-1700.ngrok-free.app/users/auth/google")
+            .url("https://532dcd7bd4e0.ngrok-free.app/users/auth/google")
             .post(requestBody)
+            .addHeader("ngrok-skip-browser-warning", "true")
             .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Unexpected code $response")
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            val errorBody = response.body.string()
+                            Log.e(TAG, "Error response: $errorBody")
+                            throw IOException("Unexpected code $response - Body: $errorBody")
+                        }
 
-            val responseBody = response.body.string()
-            val json = JSONObject(responseBody)
-            val userId = json.getString("userid")
-            saveUserId(userId)
-            continueWithGmailAccess(userId)
-        }
-    }
+                        val responseBody = response.body.string()
+                        val json = JSONObject(responseBody)
+                        val userId = json.getString("userid")
 
-    private fun saveUserId(userId: String) {
-        getSharedPreferences("user", MODE_PRIVATE).edit {
-            putString("userId", userId)
+                        withContext(Dispatchers.Main) {
+                            saveUserId(userId)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Log.e(TAG, "Error enviando token al backend", e)
+                    Toast.makeText(this@MainActivity, "Error de conexión", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            }
         }
     }
 
@@ -164,156 +189,173 @@ class MainActivity : AppCompatActivity() {
     }
 
     // 3. Función para continuar si tiene acceso
-    private fun continueWithGmailAccess(userId: String) {
-        val googleAccount = account.account
-        if (googleAccount == null) {
-            Log.e("GMAIL_AUTH", "Cuenta de Google nula")
-            return
+    private fun continueWithGmailAccess() {
+        fun getUserEmail(): String {
+            // ✅ Usar la variable de clase si está disponible
+            return userEmail.ifEmpty {
+                // Fallback: obtener de SharedPreferences
+                getSharedPreferences("user", MODE_PRIVATE).getString("userEmail", "") ?: ""
+            }
         }
 
-        val scope = "oauth2:https://www.googleapis.com/auth/gmail.readonly"
-        Thread {
+        fun initializeGmailService(credential: GoogleAccountCredential) {
+            val transport = NetHttpTransport()
+            val jsonFactory = GsonFactory.getDefaultInstance()
+
+            gmailService = Gmail.Builder(transport, jsonFactory, credential)
+                .setApplicationName("email reader")
+                .build()
+        }
+
+        val credential = GoogleAccountCredential.usingOAuth2(
+            this, gmailScope
+        )
+
+        // Configurar la cuenta (necesitas obtener el email del usuario)
+        credential.selectedAccountName = getUserEmail()
+
+        // Inicializar el servicio Gmail
+        initializeGmailService(credential)
+
+        // Usar el servicio de Gmail
+        readGmailMessages()
+    }
+
+    private fun readGmailMessages() {
+        lifecycleScope.launch {
             try {
-                val token = GoogleAuthUtil.getToken(this@MainActivity, googleAccount, scope)
+                withContext(Dispatchers.IO) {
+                    // Establecer zona horario de Lima
+                    val limaZone = TimeZone.getTimeZone("America/Lima")
 
-                // Establecer zona horario de Lima
-                val limaZone = TimeZone.getTimeZone("America/Lima")
+                    // Armar fecha
+                    val today = Calendar.getInstance(limaZone).apply {
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    val tomorrow = Calendar.getInstance(limaZone).apply {
+                        time = today.time
+                        add(Calendar.DATE, 1)
+                    }
 
-                // Armar fecha
-                val today = Calendar.getInstance(limaZone).apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                val tomorrow = Calendar.getInstance(limaZone).apply {
-                    time = today.time
-                    add(Calendar.DATE, 1)
-                }
+                    val after = today.timeInMillis / 1000
+                    val before = tomorrow.timeInMillis / 1000
 
-                val after = today.timeInMillis / 1000
-                val before = tomorrow.timeInMillis / 1000
+                    val query = "(from:notificaciones@yape.pe) after:$after before:$before"
 
-                // Armar query y URL
-                val query = "(from:notificaciones@yape.pe) after:$after before:$before"
-                val encodedQuery = URLEncoder.encode(query, "UTF-8")
-                val url = "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=$encodedQuery"
+                    val messagesResult = gmailService?.users()?.messages()?.list("me")
+                        ?.setQ(query)
+                        ?.execute()
 
-                // Hacer request con OkHttp
-                val request = Request.Builder()
-                    .url(url)
-                    .addHeader("Authorization", "Bearer $token")
-                    .build()
+                    val movementsList: MutableList<MutableMap<String, Any>> = mutableListOf()
 
-                val response = client.newCall(request).execute()
+                    messagesResult?.messages?.forEach { message ->
+                        accessMessage(
+                            message.id,
+                            movementsList
+                        )
+                    }
+                    sendJSON(client, movementsList)
 
-                if (response.isSuccessful) {
-                    val body = response.body.string()
-                    val message = JSONObject(body)
-                    accessMessage(token, client, message)
-                } else {
-                    Log.e("GMAIL_API", "Error ${response.code}: ${response.message}")
                 }
             } catch (e: Exception) {
-                Log.e("GMAIL_API", "Excepción: ${e.message}")
+                Log.e("GMAIL_API", "Error: ${e.message}")
             }
-        }.start()
+        }
     }
 
-    fun accessMessage(token: String, client: OkHttpClient, message: JSONObject) {
-        // Extraer todos los correos del día
-        val messages = message.optJSONArray("messages")
+    suspend fun accessMessage(
+        messageId: String,
+        movementsList: MutableList<MutableMap<String, Any>>
+    ) {
+        try {
+            withContext(Dispatchers.IO) {
+                val dataToSend: MutableMap<String, Any> = mutableMapOf(
+                    "date" to "",
+                    "amount" to 0,
+                    "category" to "",
+                    "title" to "",
+                    "note" to "",
+                    "beneficiary" to "",
+                    "account" to ""
+                )
 
-        // Iterar sobre cada correo
-        if (messages != null) {
-            val movementsList: MutableList<MutableMap<String, String>> = mutableListOf()
-            for (i in 0 until messages.length()) {
-                val messageItem = messages.getJSONObject(i)
-                val messageId = messageItem.getString("id")
+                val message =
+                    gmailService?.users()?.messages()?.get("me", messageId)?.setFormat("full")
+                        ?.execute()
 
-                // Armar url
-                val url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/$messageId"
+                val payload = message?.payload
 
-                // Hacer request
-                val request = Request.Builder()
-                    .url(url)
-                    .addHeader("Authorization", "Bearer $token")
-                    .build()
+                val bodyData = when {
+                    // Caso simple: todo el cuerpo está en payload.body
+                    payload?.body?.data != null -> payload.body.data
 
-                val response = client.newCall(request).execute()
+                    // Caso multipart: buscar parte con mimeType "text/plain" o "text/html"
+                    payload?.parts != null -> {
+                        payload.parts
+                            .firstOrNull { it.mimeType == "text/plain" || it.mimeType == "text/html" }
+                            ?.body
+                            ?.data
+                    }
 
-                if (response.isSuccessful) {
-                    val body = response.body.string()
-                    val message = JSONObject(body)
-                    movementsList.add(readMessage(message))
-                } else {
-                    Log.e("GMAIL_API", "Error ${response.code}: ${response.message}")
+                    else -> null
                 }
+
+                // Decodificar el cuerpo del mensaje (está en Base64 URL-safe)
+                val decodedBytes = Base64.decode(bodyData, Base64.URL_SAFE)
+                val messageBody = String(decodedBytes, Charsets.UTF_8)
+
+                val amountRegex = Regex("""\d+\.\d+""")
+                val dateRegex =
+                    Regex("""(\d{1,2}\s\w+\s\d{4})\s-\s(\d{2}:\d{2}\s[ap]\.\sm\.)""")
+                val beneficiaryRegex = Regex("""Nombre del Beneficiario\s+(.+)""")
+                val amountStr = amountRegex.find(messageBody)?.value ?: "Monto desconocido"
+                val amountFloat = amountStr.toFloatOrNull()?.let { -it } ?: 0
+                val beneficiary = beneficiaryRegex.find(messageBody)?.groups?.get(1)?.value
+                    ?: "Beneficiario desconocido"
+
+                // Convertir fecha a formato requerido por Cashew
+                val dateDate =
+                    dateRegex.find(messageBody)?.groups?.get(1)?.value ?: "Fecha desconocida"
+                val inputFormat =
+                    SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("es-PE"))
+                val outputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val parsedDate = inputFormat.parse(dateDate) ?: "Fecha desconocida"
+                val dateFormated = outputFormat.format(parsedDate)
+
+                // Convertir hora a formato requerido por Cashew
+                val dateTime =
+                    dateRegex.find(messageBody)?.groups?.get(2)?.value ?: "Hora desconocida"
+                val originalTime =
+                    dateTime.replace(".", "").replace("a m", "AM").replace("p m", "PM")
+                val inputTime = SimpleDateFormat("hh:mm a", Locale.US)
+                val outputTime = SimpleDateFormat("HH:mm", Locale.getDefault())
+                val parsedTime = inputTime.parse(originalTime) ?: "Hora desconocida"
+                val timeFormated = outputTime.format(parsedTime)
+
+                dataToSend["date"] = "$dateFormated $timeFormated"
+                dataToSend["amount"] = amountFloat
+                dataToSend["beneficiary"] = beneficiary
+
+                movementsList.add(dataToSend)
             }
-            sendJSON(client, movementsList)
+        } catch (e: Exception) {
+            Log.e("GmailAccess", "Error al acceder al mensaje", e)
         }
     }
 
-    fun readMessage(message: JSONObject): MutableMap<String, String> {
-        val payload = message.getJSONObject("payload")
-        val parts = payload.getJSONArray("parts")
-        val dataToSend = mutableMapOf<String, String>(
-            "date" to "",
-            "amount" to "",
-            "category" to "",
-            "title" to "",
-            "note" to "",
-            "beneficiary" to "",
-            "account" to ""
-        )
-        for (i in 0 until parts.length()) {
-            val part = parts.getJSONObject(i)
-            if (part.optString("mimeType") == "text/plain") {
-                val data = part.optJSONObject("body")?.optString("data")
-                if (!data.isNullOrEmpty()) {
-                    val decoded = Base64.decode(data, Base64.URL_SAFE)
-                    val body = String(decoded, Charsets.UTF_8)
-                    val amountRegex = Regex("""\d+\.\d+""")
-                    val dateRegex =
-                        Regex("""(\d{1,2}\s\w+\s\d{4})\s-\s(\d{2}:\d{2}\s[ap]\.\sm\.)""")
-                    val beneficiaryRegex = Regex("""Nombre del Beneficiario\s+(.+)""")
-                    val amount = amountRegex.find(body)?.value ?: "Monto desconocido"
-                    val beneficiary = beneficiaryRegex.find(body)?.groups?.get(1)?.value
-                        ?: "Beneficiario desconocido"
-
-                    // Convertir fecha a formato requerido por Cashew
-                    val dateDate =
-                        dateRegex.find(body)?.groups?.get(1)?.value ?: "Fecha desconocida"
-                    val inputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("es", "PE"))
-                    val outputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                    val parsedDate = inputFormat.parse(dateDate) ?: "Fecha desconocida"
-                    val dateFormated = outputFormat.format(parsedDate)
-
-                    // Convertir hora a formato requerido por Cashew
-                    val dateTime = dateRegex.find(body)?.groups?.get(2)?.value ?: "Hora desconocida"
-                    val originalTime =
-                        dateTime.replace(".", "").replace("a m", "AM").replace("p m", "PM")
-                    val inputTime = SimpleDateFormat("hh:mm a", Locale.US)
-                    val outputTime = SimpleDateFormat("HH:mm", Locale.getDefault())
-                    val parsedTime = inputTime.parse(originalTime) ?: "Hora desconocida"
-                    val timeFormated = outputTime.format(parsedTime)
-
-                    dataToSend["date"] = "$dateFormated $timeFormated"
-                    dataToSend["amount"] = "-$amount"
-                    dataToSend["beneficiary"] = beneficiary
-                }
-            }
-        }
-        return dataToSend
-    }
-
-    fun sendJSON(client: OkHttpClient, movementsList: MutableList<MutableMap<String, String>>) {
+    private fun sendJSON(
+        client: OkHttpClient,
+        movementsList: MutableList<MutableMap<String, Any>>
+    ) {
         val gson = Gson()
         val jsonString = gson.toJson(movementsList)
         val requestBody = jsonString.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("https://5e04-2001-1388-1760-9db6-82b2-6c7c-599a-1700.ngrok-free.app/process-expenses")
+            .url("https://532dcd7bd4e0.ngrok-free.app/process-expenses")
             .post(requestBody)
             .build()
 
