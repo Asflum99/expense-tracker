@@ -5,6 +5,7 @@ import android.os.Environment
 import android.util.Base64
 import android.util.Log
 import android.widget.Toast
+import com.asflum.cashewregister.strategies.YapeEmailStrategy
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
@@ -24,19 +25,31 @@ import java.util.Locale
 import java.util.TimeZone
 
 object GmailService {
-    private var gmailService: Gmail? = null
+    private lateinit var gmailService: Gmail
     private val gmailScope = listOf(
         "https://www.googleapis.com/auth/gmail.readonly"
     )
 
-    suspend fun continueWithGmailAccess(context: Context, userEmail: String, client: OkHttpClient, ngrokUrl: String) {
-        fun initializeGmailService(credential: GoogleAccountCredential) {
-            val transport = NetHttpTransport()
-            val jsonFactory = GsonFactory.getDefaultInstance()
+    suspend fun continueWithGmailAccess(
+        context: Context,
+        userEmail: String,
+        client: OkHttpClient,
+        ngrokUrl: String
+    ) {
+        fun initializeGmailService(credential: GoogleAccountCredential): Boolean {
+            return try {
+                val transport = NetHttpTransport()
+                val jsonFactory = GsonFactory.getDefaultInstance()
 
-            gmailService = Gmail.Builder(transport, jsonFactory, credential)
-                .setApplicationName("email reader")
-                .build()
+                gmailService = Gmail.Builder(transport, jsonFactory, credential)
+                    .setApplicationName("email reader")
+                    .build()
+
+                true
+            } catch (e: Exception) {
+                Log.e("GmailService", "Error al inicializar Gmail", e)
+                false
+            }
         }
 
         val credential = GoogleAccountCredential.usingOAuth2(
@@ -47,13 +60,23 @@ object GmailService {
         credential.selectedAccountName = userEmail
 
         // Inicializar el servicio Gmail
-        initializeGmailService(credential)
+        val success = initializeGmailService(credential)
+
+        // Si falla la inicialización, cerrar la app
+        if (!success) {
+            Toast.makeText(context, "No se pudo conectar con Gmail", Toast.LENGTH_LONG).show()
+            return
+        }
 
         // Usar el servicio de Gmail
         readGmailMessages(context, client, ngrokUrl)
     }
 
-    private suspend fun readGmailMessages(context: Context, client: OkHttpClient, ngrokUrl: String) {
+    private suspend fun readGmailMessages(
+        context: Context,
+        client: OkHttpClient,
+        ngrokUrl: String
+    ) {
         withContext(Dispatchers.IO) {
             try {
                 // Establecer zona horario de Lima
@@ -74,20 +97,15 @@ object GmailService {
                 val after = today.timeInMillis / 1000
                 val before = tomorrow.timeInMillis / 1000
 
-                val query = "(from:notificaciones@yape.pe) after:$after before:$before"
+                val strategies = listOf(
+                    YapeEmailStrategy()
+                )
 
-                val messagesResult = gmailService?.users()?.messages()?.list("me")
-                    ?.setQ(query)
-                    ?.execute()
-
-                val movementsList: MutableList<MutableMap<String, Any>> = mutableListOf()
-
-                messagesResult?.messages?.forEach { message ->
-                    accessMessage(
-                        message.id,
-                        movementsList
-                    )
-                }
+                val movementsList = buildList {
+                    for (strategy in strategies) {
+                        addAll(strategy.processMessages(gmailService, after, before))
+                    }
+                }.toMutableList()
 
                 sendJSON(context, client, movementsList, ngrokUrl)
             } catch (e: Exception) {
@@ -96,25 +114,24 @@ object GmailService {
         }
     }
 
-    private suspend fun accessMessage(
+    suspend fun accessMessage(
         messageId: String,
-        movementsList: MutableList<MutableMap<String, Any>>
-    ) {
+        listToReturn: MutableList<MutableMap<String, Any>>
+    ): MutableList<MutableMap<String, Any>> {
+        val dataToSend = mutableMapOf<String, Any>(
+            "date" to "",
+            "amount" to 0,
+            "category" to "",
+            "title" to "",
+            "note" to "",
+            "beneficiary" to "",
+            "account" to ""
+        )
         try {
             withContext(Dispatchers.IO) {
-                val dataToSend: MutableMap<String, Any> = mutableMapOf(
-                    "date" to "",
-                    "amount" to 0,
-                    "category" to "",
-                    "title" to "",
-                    "note" to "",
-                    "beneficiary" to "",
-                    "account" to ""
-                )
-
                 val message =
-                    gmailService?.users()?.messages()?.get("me", messageId)?.setFormat("full")
-                        ?.execute()
+                    gmailService.users().messages().get("me", messageId).setFormat("full")
+                        .execute()
 
                 val payload = message?.payload
 
@@ -169,11 +186,13 @@ object GmailService {
                 dataToSend["amount"] = amountFloat
                 dataToSend["beneficiary"] = beneficiary
 
-                movementsList.add(dataToSend)
+                listToReturn.add(dataToSend)
             }
         } catch (e: Exception) {
             Log.e("GmailAccess", "Error al acceder al mensaje", e)
+            null
         }
+        return listToReturn
     }
 
     private suspend fun sendJSON(
