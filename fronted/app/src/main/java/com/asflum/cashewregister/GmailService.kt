@@ -119,7 +119,7 @@ object GmailService {
                 val payload = message?.payload
 
                 val bodyData = when {
-                    // Caso simple: todo el cuerpo está en payload.body
+                    // Caso simple: el cuerpo está en payload.body
                     payload?.body?.data != null -> payload.body.data
 
                     // Caso multipart: buscar parte con mimeType "text/plain" o "text/html"
@@ -186,7 +186,7 @@ object GmailService {
         val requestBody = jsonString.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("https://532dcd7bd4e0.ngrok-free.app/process-expenses")
+            .url("https://41809ea7de49.ngrok-free.app/process-expenses")
             .post(requestBody)
             .build()
 

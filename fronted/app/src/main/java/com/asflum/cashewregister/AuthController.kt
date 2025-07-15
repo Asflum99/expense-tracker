@@ -13,15 +13,8 @@ import okhttp3.OkHttpClient
 object AuthController {
     private var userEmail: String = ""
     private val client = OkHttpClient()
-    suspend fun handleRegisterClick(context: Context) {
-        val credentialManager = CredentialProvider.getCredentialManager(context)
-        val request = CredentialProvider.createCredentialRequest()
-
+    suspend fun handleRegisterClick(context: Context, result: GetCredentialResponse) {
         try {
-            val result = credentialManager.getCredential(
-                request = request,
-                context = context
-            )
             handleSignIn(context, result)
             GmailService.continueWithGmailAccess(context, userEmail, client)
         } catch (e: GetCredentialException) {

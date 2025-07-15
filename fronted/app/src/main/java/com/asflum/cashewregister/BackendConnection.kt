@@ -22,7 +22,7 @@ object BackendConnection {
 
                 val requestBody = jsonString.toRequestBody("application/json".toMediaType())
                 val request = Request.Builder()
-                    .url("https://532dcd7bd4e0.ngrok-free.app/users/auth/google")
+                    .url("https://41809ea7de49.ngrok-free.app/users/auth/google")
                     .post(requestBody)
                     .addHeader("ngrok-skip-browser-warning", "true")
                     .build()
