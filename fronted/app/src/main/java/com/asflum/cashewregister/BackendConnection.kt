@@ -11,7 +11,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 object BackendConnection {
-    suspend fun sendTokenToBackend(context: Context, idToken: String, client: OkHttpClient): Boolean {
+    suspend fun sendTokenToBackend(context: Context, idToken: String, client: OkHttpClient, ngrokUrl: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 val jsonString = """
@@ -22,7 +22,7 @@ object BackendConnection {
 
                 val requestBody = jsonString.toRequestBody("application/json".toMediaType())
                 val request = Request.Builder()
-                    .url("https://41809ea7de49.ngrok-free.app/users/auth/google")
+                    .url("${ngrokUrl}/users/auth/google")
                     .post(requestBody)
                     .addHeader("ngrok-skip-browser-warning", "true")
                     .build()

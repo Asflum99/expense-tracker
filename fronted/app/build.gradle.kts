@@ -18,15 +18,26 @@ android {
 
         // Load values from apikeys.properties
         val apiKeysFile = project.rootProject.file("apikeys.properties")
-        val properties = Properties()
-        properties.load(apiKeysFile.inputStream())
+        val apiKeys = Properties()
+        apiKeys.load(apiKeysFile.inputStream())
 
         // Return empty key in case something goes wrong
-        val webClientId = properties.getProperty("WEB_CLIENT_ID") ?: ""
+        val webClientId = apiKeys.getProperty("WEB_CLIENT_ID") ?: ""
         buildConfigField(
             "String",
             "WEB_CLIENT_ID",
             "\"$webClientId\""
+        )
+
+        // Load values from local.properties
+        val localPropertiesFile = project.rootProject.file("local.properties")
+        val localProperties = Properties()
+        localProperties.load(localPropertiesFile.inputStream())
+        val backendUrl = localProperties.getProperty("backendUrl") ?: ""
+        buildConfigField(
+            "String",
+            "BACKEND_URL",
+            "\"${backendUrl}\""
         )
     }
 

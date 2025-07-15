@@ -29,7 +29,7 @@ object GmailService {
         "https://www.googleapis.com/auth/gmail.readonly"
     )
 
-    suspend fun continueWithGmailAccess(context: Context, userEmail: String, client: OkHttpClient) {
+    suspend fun continueWithGmailAccess(context: Context, userEmail: String, client: OkHttpClient, ngrokUrl: String) {
         fun initializeGmailService(credential: GoogleAccountCredential) {
             val transport = NetHttpTransport()
             val jsonFactory = GsonFactory.getDefaultInstance()
@@ -50,10 +50,10 @@ object GmailService {
         initializeGmailService(credential)
 
         // Usar el servicio de Gmail
-        readGmailMessages(context, client)
+        readGmailMessages(context, client, ngrokUrl)
     }
 
-    private suspend fun readGmailMessages(context: Context, client: OkHttpClient) {
+    private suspend fun readGmailMessages(context: Context, client: OkHttpClient, ngrokUrl: String) {
         withContext(Dispatchers.IO) {
             try {
                 // Establecer zona horario de Lima
@@ -89,7 +89,7 @@ object GmailService {
                     )
                 }
 
-                sendJSON(context, client, movementsList)
+                sendJSON(context, client, movementsList, ngrokUrl)
             } catch (e: Exception) {
                 Log.e("GMAIL_API", "Error: ${e.message}")
             }
@@ -179,14 +179,15 @@ object GmailService {
     private suspend fun sendJSON(
         context: Context,
         client: OkHttpClient,
-        movementsList: MutableList<MutableMap<String, Any>>
+        movementsList: MutableList<MutableMap<String, Any>>,
+        ngrokUrl: String
     ) {
         val gson = Gson()
         val jsonString = gson.toJson(movementsList)
         val requestBody = jsonString.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("https://41809ea7de49.ngrok-free.app/process-expenses")
+            .url("${ngrokUrl}/process-expenses")
             .post(requestBody)
             .build()
 

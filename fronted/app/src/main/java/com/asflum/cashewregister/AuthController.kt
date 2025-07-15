@@ -11,12 +11,13 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingExcept
 import okhttp3.OkHttpClient
 
 object AuthController {
+    private var ngrokUrl = BuildConfig.BACKEND_URL
     private var userEmail: String = ""
     private val client = OkHttpClient()
     suspend fun handleRegisterClick(context: Context, result: GetCredentialResponse) {
         try {
             handleSignIn(context, result)
-            GmailService.continueWithGmailAccess(context, userEmail, client)
+            GmailService.continueWithGmailAccess(context, userEmail, client, ngrokUrl)
         } catch (e: GetCredentialException) {
             Log.e(TAG, "Error: ${e.message}")
         }
@@ -46,7 +47,7 @@ object AuthController {
                 val idToken = googleIdTokenCredential.idToken
                 userEmail = googleIdTokenCredential.id
                 UserPrefs.saveUserEmail(context, userEmail)
-                BackendConnection.sendTokenToBackend(context, idToken, client)
+                BackendConnection.sendTokenToBackend(context, idToken, client, ngrokUrl)
             } catch (e: GoogleIdTokenParsingException) {
                 Log.e(TAG, "ID Token invalid", e)
             }
