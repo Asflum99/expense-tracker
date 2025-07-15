@@ -30,10 +30,10 @@ android {
         )
 
         // Load values from local.properties
-        val localPropertiesFile = project.rootProject.file("local.properties")
-        val localProperties = Properties()
-        localProperties.load(localPropertiesFile.inputStream())
-        val backendUrl = localProperties.getProperty("backendUrl") ?: ""
+        val localPropsFile = project.rootProject.file("local.properties")
+        val localProps = Properties()
+        localProps.load(localPropsFile.inputStream())
+        val backendUrl = localProps.getProperty("backendUrl") ?: ""
         buildConfigField(
             "String",
             "BACKEND_URL",

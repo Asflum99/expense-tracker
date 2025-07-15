@@ -11,25 +11,25 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingExcept
 import okhttp3.OkHttpClient
 
 object AuthController {
-    private var ngrokUrl = BuildConfig.BACKEND_URL
     private var userEmail: String = ""
     private val client = OkHttpClient()
     suspend fun handleRegisterClick(context: Context, result: GetCredentialResponse) {
+        val ngrokUrl = BuildConfig.BACKEND_URL
         try {
-            handleSignIn(context, result)
+            handleSignIn(context, result, ngrokUrl)
             GmailService.continueWithGmailAccess(context, userEmail, client, ngrokUrl)
         } catch (e: GetCredentialException) {
             Log.e(TAG, "Error: ${e.message}")
         }
     }
 
-    private suspend fun handleSignIn(context: Context, result: GetCredentialResponse) {
+    private suspend fun handleSignIn(context: Context, result: GetCredentialResponse, ngrokUrl: String) {
         // Handle the successfully returned credential
         when (val credential = result.credential) {
 
             // GoogleIdToken credential
             is CustomCredential -> {
-                handleGoogleCredential(context, credential)
+                handleGoogleCredential(context, credential, ngrokUrl)
             }
 
             else -> {
@@ -39,7 +39,7 @@ object AuthController {
         }
     }
 
-    private suspend fun handleGoogleCredential(context: Context, credential: CustomCredential) {
+    private suspend fun handleGoogleCredential(context: Context, credential: CustomCredential, ngrokUrl: String) {
 
         if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
             try {
