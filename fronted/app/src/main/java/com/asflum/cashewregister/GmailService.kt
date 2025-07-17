@@ -5,7 +5,9 @@ import android.os.Environment
 import android.util.Base64
 import android.util.Log
 import android.widget.Toast
+import com.asflum.cashewregister.strategies.InterbankEmailStrategy
 import com.asflum.cashewregister.strategies.YapeEmailStrategy
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
@@ -25,6 +27,8 @@ import java.util.Locale
 import java.util.TimeZone
 
 object GmailService {
+    private val client = OkHttpClient()
+    private const val NGROKURL = BuildConfig.BACKEND_URL
     private lateinit var gmailService: Gmail
     private val gmailScope = listOf(
         "https://www.googleapis.com/auth/gmail.readonly"
@@ -32,9 +36,7 @@ object GmailService {
 
     suspend fun continueWithGmailAccess(
         context: Context,
-        userEmail: String,
-        client: OkHttpClient,
-        ngrokUrl: String
+        gmailCredential: GoogleAccountCredential
     ) {
         fun initializeGmailService(credential: GoogleAccountCredential): Boolean {
             return try {
@@ -42,7 +44,7 @@ object GmailService {
                 val jsonFactory = GsonFactory.getDefaultInstance()
 
                 gmailService = Gmail.Builder(transport, jsonFactory, credential)
-                    .setApplicationName("email reader")
+                    .setApplicationName("email-reader")
                     .build()
 
                 true
@@ -52,15 +54,8 @@ object GmailService {
             }
         }
 
-        val credential = GoogleAccountCredential.usingOAuth2(
-            context, gmailScope
-        )
-
-        // Configurar la cuenta (necesitas obtener el email del usuario)
-        credential.selectedAccountName = userEmail
-
         // Inicializar el servicio Gmail
-        val success = initializeGmailService(credential)
+        val success = initializeGmailService(gmailCredential)
 
         // Si falla la inicialización, cerrar la app
         if (!success) {
@@ -69,13 +64,11 @@ object GmailService {
         }
 
         // Usar el servicio de Gmail
-        readGmailMessages(context, client, ngrokUrl)
+        readGmailMessages(context)
     }
 
     private suspend fun readGmailMessages(
-        context: Context,
-        client: OkHttpClient,
-        ngrokUrl: String
+        context: Context
     ) {
         withContext(Dispatchers.IO) {
             try {
@@ -98,6 +91,7 @@ object GmailService {
                 val before = tomorrow.timeInMillis / 1000
 
                 val strategies = listOf(
+                    InterbankEmailStrategy(),
                     YapeEmailStrategy()
                 )
 
@@ -107,7 +101,7 @@ object GmailService {
                     }
                 }.toMutableList()
 
-                sendJSON(context, client, movementsList, ngrokUrl)
+                sendJSON(context, movementsList)
             } catch (e: Exception) {
                 Log.e("GMAIL_API", "Error: ${e.message}")
             }
@@ -115,18 +109,9 @@ object GmailService {
     }
 
     suspend fun accessMessage(
-        messageId: String,
-        listToReturn: MutableList<MutableMap<String, Any>>
-    ): MutableList<MutableMap<String, Any>> {
-        val dataToSend = mutableMapOf<String, Any>(
-            "date" to "",
-            "amount" to 0,
-            "category" to "",
-            "title" to "",
-            "note" to "",
-            "beneficiary" to "",
-            "account" to ""
-        )
+        messageId: String
+    ): String {
+        var messageBody = ""
         try {
             withContext(Dispatchers.IO) {
                 val message =
@@ -152,61 +137,25 @@ object GmailService {
 
                 // Decodificar el cuerpo del mensaje (está en Base64 URL-safe)
                 val decodedBytes = Base64.decode(bodyData, Base64.URL_SAFE)
-                val messageBody = String(decodedBytes, Charsets.UTF_8)
-
-                val amountRegex = Regex("""\d+\.\d+""")
-                val dateRegex =
-                    Regex("""(\d{1,2}\s\w+\s\d{4})\s-\s(\d{2}:\d{2}\s[ap]\.\sm\.)""")
-                val beneficiaryRegex = Regex("""Nombre del Beneficiario\s+(.+)""")
-                val amountStr = amountRegex.find(messageBody)?.value ?: "Monto desconocido"
-                val amountFloat = amountStr.toFloatOrNull()?.let { -it } ?: 0
-                val beneficiary = beneficiaryRegex.find(messageBody)?.groups?.get(1)?.value
-                    ?: "Beneficiario desconocido"
-
-                // Convertir fecha a formato requerido por Cashew
-                val dateDate =
-                    dateRegex.find(messageBody)?.groups?.get(1)?.value ?: "Fecha desconocida"
-                val inputFormat =
-                    SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("es-PE"))
-                val outputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                val parsedDate = inputFormat.parse(dateDate) ?: "Fecha desconocida"
-                val dateFormated = outputFormat.format(parsedDate)
-
-                // Convertir hora a formato requerido por Cashew
-                val dateTime =
-                    dateRegex.find(messageBody)?.groups?.get(2)?.value ?: "Hora desconocida"
-                val originalTime =
-                    dateTime.replace(".", "").replace("a m", "AM").replace("p m", "PM")
-                val inputTime = SimpleDateFormat("hh:mm a", Locale.US)
-                val outputTime = SimpleDateFormat("HH:mm", Locale.getDefault())
-                val parsedTime = inputTime.parse(originalTime) ?: "Hora desconocida"
-                val timeFormated = outputTime.format(parsedTime)
-
-                dataToSend["date"] = "$dateFormated $timeFormated"
-                dataToSend["amount"] = amountFloat
-                dataToSend["beneficiary"] = beneficiary
-
-                listToReturn.add(dataToSend)
+                messageBody = String(decodedBytes, Charsets.UTF_8)
             }
         } catch (e: Exception) {
             Log.e("GmailAccess", "Error al acceder al mensaje", e)
             null
         }
-        return listToReturn
+        return messageBody
     }
 
     private suspend fun sendJSON(
         context: Context,
-        client: OkHttpClient,
-        movementsList: MutableList<MutableMap<String, Any>>,
-        ngrokUrl: String
+        movementsList: MutableList<MutableMap<String, Any>>
     ) {
         val gson = Gson()
         val jsonString = gson.toJson(movementsList)
         val requestBody = jsonString.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("${ngrokUrl}/process-expenses")
+            .url("${NGROKURL}/process-expenses")
             .post(requestBody)
             .build()
 

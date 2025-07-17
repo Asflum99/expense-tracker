@@ -87,4 +87,5 @@ dependencies {
     implementation("com.google.apis:google-api-services-gmail:v1-rev20220404-2.0.0")
     implementation("com.google.http-client:google-http-client-gson:1.47.1")
     implementation("com.google.http-client:google-http-client-android:1.47.1")
+    implementation("androidx.browser:browser:1.8.0")
 }

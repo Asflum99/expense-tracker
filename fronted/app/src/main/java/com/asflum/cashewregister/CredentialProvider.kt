@@ -15,6 +15,7 @@ object CredentialProvider {
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(WEB_CLIENT_ID)
+            .setRequestVerifiedPhoneNumber(false)
             .build()
 
         return GetCredentialRequest.Builder()
