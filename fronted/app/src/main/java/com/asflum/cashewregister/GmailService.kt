@@ -30,9 +30,6 @@ object GmailService {
     private val client = OkHttpClient()
     private const val NGROKURL = BuildConfig.BACKEND_URL
     private lateinit var gmailService: Gmail
-    private val gmailScope = listOf(
-        "https://www.googleapis.com/auth/gmail.readonly"
-    )
 
     suspend fun continueWithGmailAccess(
         context: Context,

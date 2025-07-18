@@ -11,6 +11,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import androidx.core.net.toUri
+import androidx.core.content.edit
 
 object BackendConnection {
     private val client = OkHttpClient()
@@ -74,8 +75,15 @@ object BackendConnection {
 
             val jsonResponse = JSONObject(responseBody)
             val authUrl = jsonResponse.getString("auth_url")
+
+            val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            prefs.edit { putBoolean("auth_complete", false) }
             val customTabsIntent = CustomTabsIntent.Builder().build()
             customTabsIntent.launchUrl(context, authUrl.toUri())
+
+            while (!prefs.getBoolean("auth_complete", false)) {
+                Thread.sleep(300)
+            }
 
             true
         } catch (e: Exception) {

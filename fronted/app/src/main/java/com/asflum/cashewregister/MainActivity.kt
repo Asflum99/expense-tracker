@@ -5,8 +5,6 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import android.widget.Button
 import androidx.lifecycle.lifecycleScope
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -21,24 +19,13 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     val credential = AuthController.getUserCredentials(this@MainActivity)
-                    // Primero verificar si hay credenciales válidas
-                    if (credential != null) {
-                        // Usuario autenticado, ahora configurar Gmail
-                        if (AuthController.setupGmailAccess(this@MainActivity, credential)) {
-                            // Listo para usar Gmail
-                        } else {
-                            // Error
-                        }
+
+                    val success = AuthController.setupGmailAccess(this@MainActivity, credential)
+
+                    if (success) {
+                        GmailService.continueWithGmailAccess(this@MainActivity, credential)
                     } else {
-                        // Solicitar autenticación
-                        val result = AuthController.requestCredentials(this@MainActivity)
-                        if (result != null) {
-                            // Autenticación exitosa
-                          //  navigateToExpenseRegistration()
-                        } else {
-                            // Manejar error de autenticación
-                            Log.e("Auth", "Error")
-                        }
+                        Log.e("Gmail", "Error")
                     }
                 } catch (e: Exception) {
                     Log.e("Auth", "Error: ${e.message}")
