@@ -20,7 +20,7 @@ object AuthController {
             val request = GetCredentialRequest.Builder()
                 .addCredentialOption(
                     GetGoogleIdOption.Builder()
-                        .setFilterByAuthorizedAccounts(true)
+                        .setFilterByAuthorizedAccounts(false)
                         .setServerClientId(WEB_CLIENT_ID)
                         .build()
                 )
@@ -36,7 +36,7 @@ object AuthController {
     suspend fun setupGmailAccess(
         context: Context,
         credentialResponse: GetCredentialResponse?
-    ): Boolean {
+    ): Pair<Boolean, String> {
         return try {
             val googleIdTokenCredential = credentialResponse?.credential as GoogleIdTokenCredential
 
@@ -46,16 +46,16 @@ object AuthController {
 
             withContext(Dispatchers.IO) {
                 try {
-                    success = BackendConnection.sendIdTokenToBackend(context, idToken)
+                    success = BackendConnection.sendIdTokenToBackendForGmailAccess(context, idToken)
                 } catch (e: Exception) {
                     false
                 }
             }
 
-            return success
+            Pair(success, idToken)
         } catch (e: Exception) {
             Log.e("Gmail", "Error setting up Gmail: ${e.message}")
-            false
+            Pair(false, "")
         }
     }
 }

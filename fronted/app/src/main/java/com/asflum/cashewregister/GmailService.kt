@@ -7,7 +7,6 @@ import android.util.Log
 import android.widget.Toast
 import com.asflum.cashewregister.strategies.InterbankEmailStrategy
 import com.asflum.cashewregister.strategies.YapeEmailStrategy
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
@@ -19,6 +18,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -31,37 +31,21 @@ object GmailService {
     private const val NGROKURL = BuildConfig.BACKEND_URL
     private lateinit var gmailService: Gmail
 
-    suspend fun continueWithGmailAccess(
-        context: Context,
-        gmailCredential: GoogleAccountCredential
-    ) {
-        fun initializeGmailService(credential: GoogleAccountCredential): Boolean {
-            return try {
-                val transport = NetHttpTransport()
-                val jsonFactory = GsonFactory.getDefaultInstance()
-
-                gmailService = Gmail.Builder(transport, jsonFactory, credential)
-                    .setApplicationName("email-reader")
-                    .build()
-
-                true
-            } catch (e: Exception) {
-                Log.e("GmailService", "Error al inicializar Gmail", e)
-                false
-            }
+    suspend fun readMessages(idToken: String) {
+        val json = JSONObject().apply {
+            put("id_token", idToken)
         }
 
-        // Inicializar el servicio Gmail
-        val success = initializeGmailService(gmailCredential)
+        val requestBody = json.toString().toRequestBody("application/json".toMediaType())
 
-        // Si falla la inicialización, cerrar la app
-        if (!success) {
-            Toast.makeText(context, "No se pudo conectar con Gmail", Toast.LENGTH_LONG).show()
-            return
+        val request = Request.Builder()
+            .url("${NGROKURL}/gmail/read-messages")
+            .post(requestBody)
+            .build()
+
+        withContext(Dispatchers.IO) {
+            client.newCall(request).execute()
         }
-
-        // Usar el servicio de Gmail
-        readGmailMessages(context)
     }
 
     private suspend fun readGmailMessages(

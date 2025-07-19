@@ -20,15 +20,15 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val credential = AuthController.getUserCredentials(this@MainActivity)
 
-                    val success = AuthController.setupGmailAccess(this@MainActivity, credential)
+                    val (success, idToken) = AuthController.setupGmailAccess(this@MainActivity, credential)
 
                     if (success) {
-                        GmailService.continueWithGmailAccess(this@MainActivity, credential)
+                        GmailService.readMessages(idToken)
                     } else {
                         Log.e("Gmail", "Error")
                     }
                 } catch (e: Exception) {
-                    Log.e("Auth", "Error: ${e.message}")
+                    Log.e("Auth", "Error ejecutando flujo de autenticación", e)
                 }
             }
         }
