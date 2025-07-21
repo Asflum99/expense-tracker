@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity() {
                     val (success, idToken) = AuthController.setupGmailAccess(this@MainActivity, credential)
 
                     if (success) {
-                        GmailService.readMessages(idToken)
+                        GmailService.readMessages(this@MainActivity, idToken)
                     } else {
                         Log.e("Gmail", "Error")
                     }

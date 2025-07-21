@@ -83,7 +83,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.1")
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
-    implementation("com.google.android.libraries.identity.googleid:googleid")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("com.google.apis:google-api-services-gmail:v1-rev20220404-2.0.0")
     implementation("com.google.http-client:google-http-client-gson:1.47.1")
     implementation("com.google.http-client:google-http-client-android:1.47.1")

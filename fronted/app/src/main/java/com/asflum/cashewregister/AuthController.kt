@@ -45,11 +45,7 @@ object AuthController {
             var success = false
 
             withContext(Dispatchers.IO) {
-                try {
-                    success = BackendConnection.sendIdTokenToBackendForGmailAccess(context, idToken)
-                } catch (e: Exception) {
-                    false
-                }
+                success = BackendConnection.sendIdTokenToBackendForGmailAccess(context, idToken)
             }
 
             Pair(success, idToken)
