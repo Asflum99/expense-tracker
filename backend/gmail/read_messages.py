@@ -9,6 +9,7 @@ from typing import Any, Mapping, Optional
 from sqlite3 import Cursor
 from strategies.yape_email_strategy import YapeEmailStrategy
 from strategies.interbank_email_strategy import InterbankEmailStrategy
+from strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
 import logging, os, sqlite3
 
 
@@ -76,7 +77,7 @@ def read_gmail_messages(sub) -> list[dict]:
     after: int = int(midnight_today.timestamp())
     before: int = int(now.timestamp())
 
-    strategies = [InterbankEmailStrategy(), YapeEmailStrategy()]
+    strategies = [InterbankEmailStrategy(), YapeEmailStrategy(), ScotiabankEmailStrategy()]
 
     movements_list: list[dict] = []
     

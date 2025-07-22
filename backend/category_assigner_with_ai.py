@@ -28,7 +28,7 @@ def assign_category(obj) -> str:
     Monto: {obj["amount"]}
     Beneficiario: {obj["beneficiary"]}
 
-    Responde solo con una de las categorías listadas arriba.
+    Responde solo con una de las categorías listadas arriba. No modifiques el nombre de la categoría.
     """
 
     chat_completion = client.chat.completions.create(

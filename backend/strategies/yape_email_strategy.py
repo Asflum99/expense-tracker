@@ -114,7 +114,7 @@ class YapeEmailStrategy(EmailStrategy):
                 beneficiary_regex: str = str(beneficiary_regex.group(1))
 
             # Guardar los datos en el diccionario
-            dict_to_send["amount"] = amount_regex
+            dict_to_send["amount"] = -amount_regex
             dict_to_send["date"] = formatted
             dict_to_send["beneficiary"] = beneficiary_regex
 

@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Request, APIRouter
 from contextlib import closing
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
 import sqlite3, logging, os, requests, time
 
@@ -48,10 +48,10 @@ async def oauth2callback(request: Request):
         if response.status_code == 200:
             result = response.json()
             if "access_token" not in result:
-                raise Exception("Missing access_token in response")
+                raise HTTPException(status_code=400, detail="Missing access token in response")
             return result
         else:
-            raise Exception(f"Token exchange failed: {response.text}")
+            raise HTTPException(f"Token exchange failed: {response.text}")
 
     def delete_data(state):
         with closing(sqlite3.connect("db.sqlite")) as conn:
@@ -92,14 +92,16 @@ async def oauth2callback(request: Request):
     state = request.query_params.get("state")
     error = request.query_params.get("error")
 
-    code_verifier = load_data(state)
-    sub = get_sub_by_state(state)
-
-    if not code_verifier:
-        raise HTTPException(400, "Missing code_verifier")
-
     if error:
         raise HTTPException(status_code=400, detail=f"Authorization failed: {error}")
+
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing code")
+
+    code_verifier = load_data(state)
+    if not code_verifier:
+        raise HTTPException(400, "Missing code_verifier")
+    sub = get_sub_by_state(state)
 
     if code:
         tokens = exchange_code_for_token(
@@ -119,6 +121,18 @@ async def oauth2callback(request: Request):
                 "expires_in": tokens["expires_in"],
             }
         )
-        return RedirectResponse("cashew://oauth2callback", status_code=302)
+
+        html_content = """
+        <html>
+            <head><title>Redirigiendo...</title></head>
+            <body>
+                <script>
+                    window.location.href = "cashew://oauth2callback";
+                </script>
+                <h1>Ya puedes cerrar esta ventana.</h1>
+            </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content)
 
     raise HTTPException(status_code=400, detail="No code or error received")
