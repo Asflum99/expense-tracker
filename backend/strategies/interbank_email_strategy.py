@@ -4,6 +4,7 @@ from contextlib import closing
 from sqlite3 import Cursor
 from bs4 import BeautifulSoup
 from typing import Match, Any
+from datetime import datetime
 import requests, os, sqlite3, re, base64
 
 load_dotenv()
@@ -15,7 +16,9 @@ class InterbankEmailStrategy(EmailStrategy):
     def __init__(self):
         self.name = "InterbankEmailStrategy"
 
-    def process_messages(self, after, before, refresh_token, sub, headers) -> list[dict]:
+    def process_messages(
+        self, after, before, refresh_token, sub, headers
+    ) -> list[dict]:
         query = f"(from:servicioalcliente@netinterbank.com.pe after:{after} before:{before})"
 
         while True:
@@ -52,7 +55,9 @@ class InterbankEmailStrategy(EmailStrategy):
                     )
                     conn.commit()
 
-                headers: dict[str, str] = {"Authorization": f"Bearer {new_access_token}"}
+                headers: dict[str, str] = {
+                    "Authorization": f"Bearer {new_access_token}"
+                }
             else:
                 raise Exception(
                     "No refresh_token disponible para renovar el access_token"
@@ -87,42 +92,44 @@ class InterbankEmailStrategy(EmailStrategy):
             parts_2 = parts_1[0]
             parts_3 = parts_2.get("parts", [])
             parts_4 = parts_3[0]
+            parts_5 = parts_4.get("body", {})
 
-            for key in parts_4:
-                if key == "mimeType":
-                    message_body_dict = parts_4.get("body")
-                    message_body_coded = message_body_dict.get("data")
+            message_body_coded = parts_5.get("data")
 
-                    # Decodificando el contenido del correo
-                    message_body_decoded = base64.urlsafe_b64decode(
-                        message_body_coded + "=" * (-len(message_body_coded) % 4)
-                    )
-                    decoded_html = message_body_decoded.decode("utf-8")
+            # Decodificando el contenido del correo
+            message_body_decoded = base64.urlsafe_b64decode(
+                message_body_coded + "=" * (-len(message_body_coded) % 4)
+            )
+            decoded_html = message_body_decoded.decode("utf-8")
 
-                    soup = BeautifulSoup(decoded_html, "lxml")
-                    body_message_text = soup.get_text(separator=" ")
-                    cleaned_text = " ".join(body_message_text.split())
+            soup = BeautifulSoup(decoded_html, "lxml")
+            body_message_text = soup.get_text(separator=" ")
+            cleaned_text = " ".join(body_message_text.split())
 
-                    amount_regex: float = float(
-                        str(re.search(r"\d+\.\d+", cleaned_text))
-                    )
-                    date_regex: Match[str] | None = re.search(
-                        r"\d{1,2}\s\w+\s\d{4}\s\d{1,2}:\d{2}\s[AP]M", cleaned_text
-                    )
-                    destinatary_regex: Match[str] | None = re.search(
-                        r"Destinatario:\s(.+?)\sDestino:", cleaned_text
-                    )
-                    if destinatary_regex:
-                        destinatary: str | Any = destinatary_regex.group(1)
-                    else:
-                        destinatary = ""
+            amount_regex: float = float(
+                str(re.search(r"\d+\.\d+", cleaned_text).group())
+            )
 
-                    # Guardar los datos en el diccionario
-                    dict_to_send["amount"] = -amount_regex
-                    dict_to_send["date"] = date_regex
-                    dict_to_send["beneficiary"] = destinatary
+            date_regex: str = re.search(
+                r"\d{1,2}\s\w+\s\d{4}\s\d{1,2}:\d{2}\s[AP]M", cleaned_text
+            ).group()
 
-                break
+            dt = datetime.strptime(date_regex, "%d %b %Y %I:%M %p")
+
+            formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+            destinatary_regex: Match[str] | None = re.search(
+                r"Destinatario:\s(.+?)\sDestino:", cleaned_text
+            )
+            if destinatary_regex:
+                destinatary: str | Any = destinatary_regex.group(1)
+            else:
+                destinatary = ""
+
+            # Guardar los datos en el diccionario
+            dict_to_send["amount"] = -amount_regex
+            dict_to_send["date"] = formatted_time
+            dict_to_send["beneficiary"] = destinatary
 
             movements_list.append(dict_to_send)
 

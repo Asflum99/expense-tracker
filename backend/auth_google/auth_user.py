@@ -1,11 +1,15 @@
 import urllib.parse
-from fastapi import Request, HTTPException, APIRouter
+from fastapi import Request, HTTPException, APIRouter, Depends
+from pydantic import BaseModel
 from google.oauth2 import id_token
 from google.auth.transport.requests import Request as GoogleRequest
-from contextlib import closing
 from dotenv import load_dotenv
 from logging import Logger
-import sqlite3, base64, urllib, uuid, hashlib, secrets, string, logging, os
+from database import get_db
+from sqlalchemy import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from models import OAuthSession
+import base64, urllib, uuid, hashlib, secrets, string, logging, os
 
 router = APIRouter()
 
@@ -16,33 +20,12 @@ WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")
 NGROK_URL = os.environ.get("NGROK_URL")
 
 
+class TokenBody(BaseModel):
+    id_token: str
+
+
 @router.post("/users/auth/google")
-async def google_auth(request: Request):
-    def save_data(sub, code_verifier, state):
-        with closing(sqlite3.connect("db.sqlite")) as conn:
-            cursor = conn.cursor()
-
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS oauth_sessions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    sub TEXT NOT NULL,
-                    code_verifier TEXT NOT NULL,
-                    state TEXT NOT NULL UNIQUE,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-
-            cursor.execute(
-                """
-                INSERT INTO oauth_sessions (sub, code_verifier, state) VALUES (?, ?, ?)
-                """,
-                (sub, code_verifier, state),
-            )
-
-            conn.commit()
-
+async def google_auth(token_body: TokenBody, db: AsyncSession = Depends(get_db)):
     def generate_code_verifier(length=128):
         allowed_chars = string.ascii_letters + string.digits + "-._~"
         return "".join(secrets.choice(allowed_chars) for _ in range(length))
@@ -69,9 +52,7 @@ async def google_auth(request: Request):
         return f"{base_url}?{urllib.parse.urlencode(params)}"
 
     try:
-        # Leer el body
-        body = await request.json()
-        token = body.get("id_token")
+        token = token_body.id_token
 
         if not token:
             raise HTTPException(status_code=400, detail="Missing ID token")
@@ -85,10 +66,12 @@ async def google_auth(request: Request):
         code_verifier = generate_code_verifier()
         code_challenge = generate_code_challenge(code_verifier)
         state = str(uuid.uuid4())
-        try:
-            save_data(sub, code_verifier, state)
-        except sqlite3.IntegrityError:
-            raise HTTPException(status_code=400, detail="Duplicated state")
+        await db.execute(
+            insert(OAuthSession).values(
+                sub=sub, code_verifier=code_verifier, state=state
+            )
+        )
+        await db.commit()
         auth_url = build_google_auth_url(
             WEB_CLIENT_ID,
             f"{NGROK_URL}/oauth2callback",

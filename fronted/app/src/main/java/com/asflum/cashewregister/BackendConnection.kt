@@ -2,6 +2,7 @@ package com.asflum.cashewregister
 
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.browser.customtabs.CustomTabsIntent
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -10,12 +11,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import androidx.core.net.toUri
 import androidx.core.content.edit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object BackendConnection {
     private val client = OkHttpClient()
     private const val NGROKURL = BuildConfig.BACKEND_URL
 
-    fun sendIdTokenToBackendForGmailAccess(context: Context, idToken: String): Boolean {
+    suspend fun sendIdTokenToBackendForGmailAccess(context: Context, idToken: String): Boolean {
         return try {
             val json = JSONObject().apply {
                 put("id_token", idToken)
@@ -48,12 +51,16 @@ object BackendConnection {
                 val responseBody = response.body.string()
 
                 if (!response.isSuccessful) {
+                    Toast.makeText(context, responseBody, Toast.LENGTH_SHORT).show()
                     Log.e("Backend", "Error response: $responseBody")
                     return false
                 }
 
                 val jsonResponse = JSONObject(responseBody)
                 val authUrl = jsonResponse.getString("auth_url")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, authUrl, Toast.LENGTH_SHORT).show()
+                }
 
                 val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
                 prefs.edit { putBoolean("auth_complete", false) }

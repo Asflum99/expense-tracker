@@ -74,8 +74,8 @@ def read_gmail_messages(sub) -> list[dict]:
     now: datetime = datetime.now(tz)
 
     # Convertir a timestamps
-    after: int = int(midnight_today.timestamp())
-    before: int = int(now.timestamp())
+    after: int = int(midnight_yesterday.timestamp())
+    before: int = int(midnight_today.timestamp())
 
     strategies = [InterbankEmailStrategy(), YapeEmailStrategy(), ScotiabankEmailStrategy()]
 

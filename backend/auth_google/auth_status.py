@@ -1,9 +1,13 @@
-from fastapi import HTTPException, Request, APIRouter
+from fastapi import APIRouter, Depends
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
-from contextlib import closing
 from dotenv import load_dotenv
-import sqlite3, logging, os
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from models import Users
+from database import get_db
+from pydantic import BaseModel
+import logging, os
 
 router = APIRouter()
 
@@ -13,26 +17,22 @@ load_dotenv()
 WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")
 
 
-@router.post("/users/auth/status")
-async def google_auth_status(request: Request):
-    try:
-        body = await request.json()
-        token = body.get("id_token")
+class TokenBody(BaseModel):
+    id_token: str
 
-        if not token:
-            raise HTTPException(status_code=400, detail="Missing ID token")
+
+@router.post("/users/auth/status")
+async def google_auth_status(token_body: TokenBody, db: AsyncSession = Depends(get_db)):
+    try:
+        token = token_body.id_token
 
         info = id_token.verify_oauth2_token(token, GoogleRequest(), WEB_CLIENT_ID)
         sub = info.get("sub")
 
-        with closing(sqlite3.connect("db.sqlite")) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT access_token FROM users WHERE sub = ?", (sub,))
-            result = cursor.fetchone()
-            if result:
-                return {"authenticated": True}
-            else:
-                return {"authenticated": False}
+        result = await db.execute(select(Users.access_token).where(Users.sub == sub))
+        access_token = result.scalar_one_or_none()
+
+        return {"authenticated": bool(access_token)}
 
     except Exception as e:
         logger.error(f"Auth error: {str(e)}")

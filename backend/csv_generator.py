@@ -1,13 +1,25 @@
 import csv
 
 
-def generate_csv(body) -> str:
-    keys = ["Date", "Amount", "Category", "Title", "Note", "Account"]
-    file_path = "gastos.csv"
+import csv
+from typing import List, Dict
 
-    with open(file_path, "w", newline="", encoding="utf-8") as csv_file:
+def generate_csv(body: List[Dict], output_path: str) -> str:
+    """
+    Genera un archivo CSV a partir de los datos proporcionados.
+    
+    Args:
+        body: Lista de diccionarios con los datos a escribir en el CSV
+        output_path: Ruta donde se guardará el archivo CSV
+        
+    Returns:
+        str: Ruta del archivo generado (mismo que output_path)
+    """
+    keys = ["Date", "Amount", "Category", "Title", "Note", "Account"]
+    
+    with open(output_path, "w", newline="", encoding="utf-8") as csv_file:
         writer = csv.writer(csv_file)
-        writer.writerow(keys)
+        writer.writerow(keys)  # Escribe los encabezados
         for obj in body:
             writer.writerow(
                 [
@@ -19,5 +31,5 @@ def generate_csv(body) -> str:
                     obj["account"],
                 ]
             )
-
-    return file_path
+    
+    return output_path
