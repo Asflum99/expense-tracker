@@ -3,5 +3,5 @@ from abc import ABC, abstractmethod
 class EmailStrategy(ABC):
 
     @abstractmethod
-    def process_messages(self, after, before, refresh_token, sub, headers):
+    def process_messages(self, after, before, refresh_token, sub, headers, db):
         pass

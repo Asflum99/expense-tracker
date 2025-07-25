@@ -79,7 +79,7 @@ object BackendConnection {
                 true
             }
         } catch (e: Exception) {
-            Log.e("Backend", "Error enviando token", e)
+            e.printStackTrace()
             false
         }
     }

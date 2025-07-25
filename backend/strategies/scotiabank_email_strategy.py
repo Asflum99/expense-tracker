@@ -1,11 +1,11 @@
 from strategies.email_strategy_interface import EmailStrategy
 from dotenv import load_dotenv
-from contextlib import closing
-from sqlite3 import Cursor
 from datetime import datetime
 from typing import Match, Any
 from bs4 import BeautifulSoup
-import requests, os, sqlite3, re, base64, locale
+from sqlalchemy import update
+from models import Users
+import requests, os, re, base64
 
 load_dotenv()
 WEB_CLIENT_ID: str | None = os.environ.get("WEB_CLIENT_ID")
@@ -13,11 +13,8 @@ CLIENT_SECRET: str | None = os.environ.get("CLIENT_SECRET")
 
 
 class ScotiabankEmailStrategy(EmailStrategy):
-    def __init__(self):
-        self.name = "ScotiabankEmailStrategy"
-
     def process_messages(
-        self, after, before, refresh_token, sub, headers
+        self, after, before, refresh_token, sub, headers, db
     ) -> list[dict]:
         query = f"(from:bancadigital@scotiabank.com.pe after:{after} before:{before})"
 
@@ -41,21 +38,21 @@ class ScotiabankEmailStrategy(EmailStrategy):
                 }
 
                 response = requests.post(token_url, data)
+                new_access_token = response.json().get("access_token")
 
                 if response.status_code != 200:
                     raise Exception(f"Error al refrescar token: {response.text}")
 
-                access_token = response.json().get("access_token")
-                headers = {"Authorization": f"Bearer {access_token}"}
-
                 # 🔄 Importante: Actualiza también en la base de datos el nuevo access_token
-                with closing(sqlite3.connect("db.sqlite")) as conn:
-                    cursor: Cursor = conn.cursor()
-                    cursor.execute(
-                        "UPDATE users SET access_token = ? WHERE sub = ?",
-                        (access_token, sub),
-                    )
-                    conn.commit()
+                stmt = (
+                    update(Users)
+                    .where(Users.sub == sub)
+                    .values(access_token=new_access_token)
+                )
+                db.execute(stmt)
+                db.commit()
+
+                headers = {"Authorization": f"Bearer {new_access_token}"}
             else:
                 raise Exception(
                     "No refresh_token disponible para renovar el access_token"

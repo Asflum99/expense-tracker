@@ -1,11 +1,11 @@
-from fastapi import HTTPException, Request, APIRouter, Depends
+from fastapi import HTTPException, APIRouter, Depends
 from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
 from models import OAuthSession, Users
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.dialects.postgresql import insert
 from pydantic import BaseModel
 from typing import Optional
 import logging, os, requests

@@ -2,7 +2,6 @@ package com.asflum.cashewregister
 
 import android.content.Context
 import android.os.Environment
-import android.util.Log
 import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -72,7 +71,7 @@ object GmailService {
             val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             formatter.timeZone = limaZone
             val formattedDate = formatter.format(today.time)
-            val fileName = "test_gastos_$formattedDate.csv"
+            val fileName = "Gastos_$formattedDate.csv"
 
             // Ruta a la carpeta Descargas
             val downloadsDir =
@@ -84,8 +83,7 @@ object GmailService {
                 inputStream.copyTo(outputStream)
                 outputStream.close()
                 inputStream.close()
-
-                Log.d("CSV", "Archivo guardado en: ${outputFile.absolutePath}")
+                
 
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, "Se descargó el archivo CSV", Toast.LENGTH_SHORT).show()

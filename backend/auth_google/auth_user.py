@@ -1,5 +1,4 @@
-import urllib.parse
-from fastapi import Request, HTTPException, APIRouter, Depends
+from fastapi import HTTPException, APIRouter, Depends
 from pydantic import BaseModel
 from google.oauth2 import id_token
 from google.auth.transport.requests import Request as GoogleRequest
@@ -9,7 +8,7 @@ from database import get_db
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import OAuthSession
-import base64, urllib, uuid, hashlib, secrets, string, logging, os
+import base64, urllib, uuid, hashlib, secrets, string, logging, os, urllib.parse
 
 router = APIRouter()
 

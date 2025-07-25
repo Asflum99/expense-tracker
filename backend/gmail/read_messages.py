@@ -1,16 +1,19 @@
-from fastapi import Request, HTTPException, APIRouter
+from fastapi import HTTPException, APIRouter, Depends
 from google.oauth2 import id_token
 from google.auth.transport.requests import Request as GoogleRequest
 from dotenv import load_dotenv
-from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from logging import Logger
-from typing import Any, Mapping, Optional
-from sqlite3 import Cursor
+from typing import Any, Mapping
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from database import get_db
 from strategies.yape_email_strategy import YapeEmailStrategy
 from strategies.interbank_email_strategy import InterbankEmailStrategy
 from strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
-import logging, os, sqlite3
+from pydantic import BaseModel
+from models import Users
+import logging, os
 
 
 router: APIRouter = APIRouter()
@@ -20,19 +23,24 @@ WEB_CLIENT_ID: str | None = os.environ.get("WEB_CLIENT_ID")
 logger: Logger = logging.getLogger(__name__)
 
 
+class TokenBody(BaseModel):
+    id_token: str
+
+
 @router.post("/gmail/read-messages")
-async def read_messages(request: Request) -> list[dict]:
+async def read_messages(
+    token_body: TokenBody, db: AsyncSession = Depends(get_db)
+) -> list[dict]:
 
     try:
-        body: dict = await request.json()
-        token: Optional[str] = body.get("id_token")
+        token = token_body.id_token
 
         info: Mapping[str, Any] = id_token.verify_oauth2_token(
             token, GoogleRequest(), WEB_CLIENT_ID
         )
         sub: Any | None = info.get("sub")
 
-        return read_gmail_messages(sub)
+        return read_gmail_messages(sub, db)
 
     except ValueError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token")
@@ -41,20 +49,18 @@ async def read_messages(request: Request) -> list[dict]:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-def read_gmail_messages(sub) -> list[dict]:
-    def get_tokens_by_sub(sub) -> tuple[str, str] | tuple[None, None]:
-        with closing(sqlite3.connect("db.sqlite")) as conn:
-            cursor: Cursor = conn.cursor()
-            cursor.execute(
-                "SELECT access_token, refresh_token FROM users WHERE sub = ?", (sub,)
-            )
-            result: Any = cursor.fetchone()
-            if result:
-                return result[0], result[1]
-            else:
-                return None, None
+async def read_gmail_messages(sub, db: AsyncSession) -> list[dict]:
+    async def get_tokens_by_sub(sub) -> tuple[str, str] | tuple[None, None]:
+        result = await db.execute(
+            select(Users.access_token, Users.refresh_token).where(Users.sub == sub)
+        )
+        tokens = result.fetchone()
+        if tokens:
+            return tokens[0], tokens[1]
+        else:
+            return None, None
 
-    access_token, refresh_token = get_tokens_by_sub(sub)
+    access_token, refresh_token = await get_tokens_by_sub(sub)
 
     # Zona horario de Perú (UTC-5)
     peru_offset: timedelta = timedelta(hours=-5)
@@ -74,15 +80,21 @@ def read_gmail_messages(sub) -> list[dict]:
     now: datetime = datetime.now(tz)
 
     # Convertir a timestamps
-    after: int = int(midnight_yesterday.timestamp())
-    before: int = int(midnight_today.timestamp())
+    after: int = int(midnight_today.timestamp())
+    before: int = int(now.timestamp())
 
-    strategies = [InterbankEmailStrategy(), YapeEmailStrategy(), ScotiabankEmailStrategy()]
+    strategies = [
+        InterbankEmailStrategy(),
+        YapeEmailStrategy(),
+        ScotiabankEmailStrategy(),
+    ]
 
     movements_list: list[dict] = []
-    
+
     for strategy in strategies:
-        dicts_to_add = strategy.process_messages(after, before, refresh_token, sub, headers)
+        dicts_to_add = strategy.process_messages(
+            after, before, refresh_token, sub, headers, db
+        )
         if not dicts_to_add:
             continue
         for dicts in dicts_to_add:

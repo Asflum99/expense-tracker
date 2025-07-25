@@ -1,12 +1,10 @@
 package com.asflum.cashewregister
 
 import android.os.Bundle
-import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import android.widget.Button
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
-import android.widget.Toast
 import androidx.credentials.CustomCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 
@@ -39,24 +37,13 @@ class MainActivity : AppCompatActivity() {
                                 success = result.first
                                 idToken = result.second
                             }
-                            else {
-                                Toast.makeText(this@MainActivity, credential.type, Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                        else -> {
-                            Toast.makeText(this@MainActivity, "ga", Toast.LENGTH_SHORT).show()
                         }
                     }
 
                     if (success) {
-                        Toast.makeText(this@MainActivity, "🎯 Autenticación OK, leyendo mensajes...", Toast.LENGTH_SHORT).show()
                         GmailService.readMessages(this@MainActivity, idToken)
-                    } else {
-                        Toast.makeText(this@MainActivity, "❌ Falló la autenticación con Gmail", Toast.LENGTH_SHORT).show()
-                        Log.e("Gmail", "Error")
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(this@MainActivity, "🔥 Error: ${e.message}", Toast.LENGTH_LONG).show()
                     e.printStackTrace()
                 }
             }

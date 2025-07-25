@@ -1,6 +1,5 @@
 .env
 .venv
-*.sqlite
 mock.json
 *.pyc
 *.csv

@@ -42,12 +42,6 @@ object AuthController {
         credential: GoogleIdTokenCredential
     ): Pair<Boolean, String> {
         return try {
-            // 👇 Aquí revisas qué tipo de credencial se está recibiendo
-            withContext(Dispatchers.Main) {
-                val credType = credential.javaClass.name
-                Toast.makeText(context, credType, Toast.LENGTH_LONG).show()
-            }
-
             val idToken = credential.idToken
 
             var success = false
@@ -58,9 +52,6 @@ object AuthController {
 
             Pair(success, idToken)
         } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, "ERROR: ${e.message}", Toast.LENGTH_LONG).show()
-            }
             Pair(false, "")
         }
     }

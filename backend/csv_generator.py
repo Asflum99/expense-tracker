@@ -1,8 +1,5 @@
-import csv
-
-
-import csv
 from typing import List, Dict
+import csv
 
 def generate_csv(body: List[Dict], output_path: str) -> str:
     """

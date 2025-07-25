@@ -1,10 +1,10 @@
 from strategies.email_strategy_interface import EmailStrategy
 from dotenv import load_dotenv
-from contextlib import closing
-from sqlite3 import Cursor
 from datetime import datetime
 from typing import Match, Any
-import requests, os, sqlite3, re, base64, locale
+from models import Users
+from sqlalchemy import update
+import requests, os, re, base64, locale
 
 load_dotenv()
 WEB_CLIENT_ID: str | None = os.environ.get("WEB_CLIENT_ID")
@@ -12,10 +12,9 @@ CLIENT_SECRET: str | None = os.environ.get("CLIENT_SECRET")
 
 
 class YapeEmailStrategy(EmailStrategy):
-    def __init__(self):
-        self.name = "InterbankEmailStrategy"
-
-    def process_messages(self, after, before, refresh_token, sub, headers) -> list[dict]:
+    def process_messages(
+        self, after, before, refresh_token, sub, headers, db
+    ) -> list[dict]:
         query = f"(from:notificaciones@yape.pe after:{after} before:{before})"
 
         while True:
@@ -38,21 +37,21 @@ class YapeEmailStrategy(EmailStrategy):
                 }
 
                 response = requests.post(token_url, data)
+                new_access_token = response.json().get("access_token")
 
                 if response.status_code != 200:
                     raise Exception(f"Error al refrescar token: {response.text}")
 
-                access_token = response.json().get("access_token")
-                headers = {"Authorization": f"Bearer {access_token}"}
-
                 # 🔄 Importante: Actualiza también en la base de datos el nuevo access_token
-                with closing(sqlite3.connect("db.sqlite")) as conn:
-                    cursor: Cursor = conn.cursor()
-                    cursor.execute(
-                        "UPDATE users SET access_token = ? WHERE sub = ?",
-                        (access_token, sub),
-                    )
-                    conn.commit()
+                stmt = (
+                    update(Users)
+                    .where(Users.sub == sub)
+                    .values(access_token=new_access_token)
+                )
+                db.execute(stmt)
+                db.commit()
+
+                headers = {"Authorization": f"Bearer {new_access_token}"}
             else:
                 raise Exception(
                     "No refresh_token disponible para renovar el access_token"
@@ -88,20 +87,23 @@ class YapeEmailStrategy(EmailStrategy):
             parts_3 = parts_2.get("body", [])
             message_body = parts_3.get("data", {})
 
-            message_body_decoded = base64.urlsafe_b64decode(message_body).decode("utf-8")
+            message_body_decoded = base64.urlsafe_b64decode(message_body).decode(
+                "utf-8"
+            )
 
             amount_regex: Match[str] = re.search(r"\d+\.\d+", message_body_decoded)
             if amount_regex:
                 amount_regex: float = float(amount_regex.group())
 
             date_regex: Match[str] | None = re.search(
-                r"(\d{1,2}\s\w+\s\d{4})\s-\s(\d{2}:\d{2}\s[ap]\.\sm\.)", message_body_decoded
+                r"(\d{1,2}\s\w+\s\d{4})\s-\s(\d{2}:\d{2}\s[ap]\.\sm\.)",
+                message_body_decoded,
             )
             if date_regex:
                 date_regex: str = str(date_regex.group())
 
-            date_regex = (date_regex.replace("p. m.", "PM").replace("a. m.", "AM"))
-            
+            date_regex = date_regex.replace("p. m.", "PM").replace("a. m.", "AM")
+
             # Convertir fecha a la requerida por Cashew
             locale.setlocale(locale.LC_TIME, "es_PE.utf8")
             dt = datetime.strptime(date_regex, "%d %B %Y - %I:%M %p")
