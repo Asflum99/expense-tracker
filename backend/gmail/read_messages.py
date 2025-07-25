@@ -2,7 +2,7 @@ from fastapi import HTTPException, APIRouter, Depends
 from google.oauth2 import id_token
 from google.auth.transport.requests import Request as GoogleRequest
 from dotenv import load_dotenv
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from logging import Logger
 from typing import Any, Mapping
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,7 @@ from strategies.interbank_email_strategy import InterbankEmailStrategy
 from strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
 from pydantic import BaseModel
 from models import Users
+from zoneinfo import ZoneInfo
 import logging, os
 
 
@@ -40,7 +41,7 @@ async def read_messages(
         )
         sub: Any | None = info.get("sub")
 
-        return read_gmail_messages(sub, db)
+        return await read_gmail_messages(sub, db)
 
     except ValueError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token")
@@ -63,8 +64,7 @@ async def read_gmail_messages(sub, db: AsyncSession) -> list[dict]:
     access_token, refresh_token = await get_tokens_by_sub(sub)
 
     # Zona horario de Perú (UTC-5)
-    peru_offset: timedelta = timedelta(hours=-5)
-    tz: timezone = timezone(peru_offset)
+    tz = ZoneInfo('America/Lima')
 
     # Medianoche en UTC-5
     midnight_yesterday: datetime = datetime.now(tz).replace(

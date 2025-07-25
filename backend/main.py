@@ -4,7 +4,7 @@ from gmail import read_messages
 from expenses import process_expenses
 from database import engine, Base
 from contextlib import asynccontextmanager
-import uvicorn
+from test_db import router
 
 
 @asynccontextmanager
@@ -20,7 +20,4 @@ app.include_router(auth_status.router)
 app.include_router(oauth2callback.router)
 app.include_router(read_messages.router)
 app.include_router(process_expenses.router)
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+app.include_router(router)

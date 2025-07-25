@@ -1,6 +1,6 @@
 import asyncio
-from backend.database import engine, Base
-from backend.models import Users, Beneficiaries, OAuthSession
+from database import engine, Base
+from models import Users, Beneficiaries, OAuthSession
 
 async def init():
     async with engine.begin() as conn:
