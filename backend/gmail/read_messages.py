@@ -11,6 +11,7 @@ from database import get_db
 from strategies.yape_email_strategy import YapeEmailStrategy
 from strategies.interbank_email_strategy import InterbankEmailStrategy
 from strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
+from strategies.bcp_email_strategy import BcpEmailStrategy
 from pydantic import BaseModel
 from models import Users
 from zoneinfo import ZoneInfo
@@ -87,6 +88,7 @@ async def read_gmail_messages(sub, db: AsyncSession) -> list[dict]:
         InterbankEmailStrategy(),
         YapeEmailStrategy(),
         ScotiabankEmailStrategy(),
+        BcpEmailStrategy()
     ]
 
     movements_list: list[dict] = []

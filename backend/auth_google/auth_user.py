@@ -16,7 +16,7 @@ logger: Logger = logging.getLogger(__name__)
 load_dotenv()
 ANDROID_CLIENT_ID = os.environ.get("ANDROID_CLIENT_ID")
 WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")
-NGROK_URL = os.environ.get("NGROK_URL")
+API_URL = os.environ.get("API_URL")
 
 
 class TokenBody(BaseModel):
@@ -73,7 +73,7 @@ async def google_auth(token_body: TokenBody, db: AsyncSession = Depends(get_db))
         await db.commit()
         auth_url = build_google_auth_url(
             WEB_CLIENT_ID,
-            f"{NGROK_URL}/oauth2callback",
+            f"{API_URL}/oauth2callback",
             "https://www.googleapis.com/auth/gmail.readonly",
             code_challenge,
             state,

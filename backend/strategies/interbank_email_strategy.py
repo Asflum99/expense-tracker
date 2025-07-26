@@ -115,18 +115,18 @@ class InterbankEmailStrategy(EmailStrategy):
 
             formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
 
-            destinatary_regex: Match[str] | None = re.search(
+            beneficiary_regex: Match[str] | None = re.search(
                 r"Destinatario:\s(.+?)\sDestino:", cleaned_text
             )
-            if destinatary_regex:
-                destinatary: str | Any = destinatary_regex.group(1)
+            if beneficiary_regex:
+                beneficiary: str | Any = beneficiary_regex.group(1)
             else:
-                destinatary = ""
+                beneficiary = ""
 
             # Guardar los datos en el diccionario
             dict_to_send["amount"] = -amount_regex
             dict_to_send["date"] = formatted_time
-            dict_to_send["beneficiary"] = destinatary
+            dict_to_send["beneficiary"] = beneficiary
 
             movements_list.append(dict_to_send)
 

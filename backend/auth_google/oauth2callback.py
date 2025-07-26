@@ -15,7 +15,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
-NGROK_URL = os.environ.get("NGROK_URL")
+API_URL = os.environ.get("API_URL")
 
 
 class OAuth2CallbackParams(BaseModel):
@@ -81,7 +81,7 @@ async def oauth2callback(
             CLIENT_SECRET,
             code,
             code_verifier,
-            f"{NGROK_URL}/oauth2callback",
+            f"{API_URL}/oauth2callback",
         )
         await db.execute(delete(OAuthSession).where(OAuthSession.state == state))
         await db.commit()

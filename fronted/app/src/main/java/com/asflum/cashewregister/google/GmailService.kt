@@ -22,7 +22,7 @@ import java.util.TimeZone
 
 object GmailService {
     private val client = OkHttpClient()
-    private const val NGROKURL = BuildConfig.BACKEND_URL
+    private const val API_URL = BuildConfig.BACKEND_URL
 
     suspend fun readMessages(context: Context, idToken: String) {
         val json = JSONObject().apply {
@@ -32,7 +32,7 @@ object GmailService {
         val requestBody = json.toString().toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("${NGROKURL}/gmail/read-messages")
+            .url("${API_URL}/gmail/read-messages")
             .post(requestBody)
             .build()
 
@@ -54,7 +54,7 @@ object GmailService {
         val requestBody = movementsList.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("${NGROKURL}/process-expenses")
+            .url("${API_URL}/process-expenses")
             .post(requestBody)
             .build()
 
