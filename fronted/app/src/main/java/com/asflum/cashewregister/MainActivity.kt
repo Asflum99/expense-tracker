@@ -3,10 +3,12 @@ package com.asflum.cashewregister
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import android.widget.Button
+import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
+import com.asflum.cashewregister.google.GmailBackendAuth
+import com.asflum.cashewregister.google.GmailService
+import com.asflum.cashewregister.google.GoogleAuthHandler
 import kotlinx.coroutines.launch
-import androidx.credentials.CustomCredential
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 
 class MainActivity : AppCompatActivity() {
 
@@ -18,34 +20,22 @@ class MainActivity : AppCompatActivity() {
         val recordExpensesButton = findViewById<Button>(R.id.recordExpenses)
         recordExpensesButton.setOnClickListener {
             lifecycleScope.launch {
-                try {
-                    val credential = AuthController.getUserCredentials(this@MainActivity)?.credential
+                val result = GoogleAuthHandler.getUserIdToken(this@MainActivity)
 
-                    var success = false
-                    var idToken = ""
-
-                    when (credential) {
-                        is GoogleIdTokenCredential -> {
-                            val result = AuthController.setupGmailAccess(this@MainActivity, credential)
-                            success = result.first
-                            idToken = result.second
-                        }
-                        is CustomCredential -> {
-                            if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                                val result = AuthController.setupGmailAccess(this@MainActivity, googleIdTokenCredential)
-                                success = result.first
-                                idToken = result.second
-                            }
-                        }
-                    }
-
-                    if (success) {
-                        GmailService.readMessages(this@MainActivity, idToken)
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                if (!result.isSuccess) {
+                    // Manejar el caso de error
+                    Toast.makeText(this@MainActivity, result.error, Toast.LENGTH_SHORT).show()
+                    return@launch
                 }
+
+                val success = GmailBackendAuth.setupGmailAccess(this@MainActivity, result.idToken!!)
+
+                if (!success) {
+                    // Manejar el caso de error
+                    return@launch
+                }
+
+                GmailService.readMessages(this@MainActivity, result.idToken)
             }
         }
     }

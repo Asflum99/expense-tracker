@@ -1,8 +1,9 @@
-package com.asflum.cashewregister
+package com.asflum.cashewregister.google
 
 import android.content.Context
 import android.os.Environment
 import android.widget.Toast
+import com.asflum.cashewregister.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -10,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.IOException
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -83,12 +85,12 @@ object GmailService {
                 inputStream.copyTo(outputStream)
                 outputStream.close()
                 inputStream.close()
-                
+
 
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, "Se descargó el archivo CSV", Toast.LENGTH_SHORT).show()
                 }
-            } catch (e: okio.IOException) {
+            } catch (e: IOException) {
                 e.printStackTrace()
             }
         }
