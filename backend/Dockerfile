@@ -21,9 +21,6 @@ ENV LANG=es_PE.UTF-8
 ENV LANGUAGE=es_PE:es  
 ENV LC_ALL=es_PE.UTF-8
 
-# Establecer zona horaria (opcional)
-ENV TZ=America/Lima
-
 COPY requirements.txt .
 
 RUN pip install --upgrade pip && pip install -r requirements.txt
