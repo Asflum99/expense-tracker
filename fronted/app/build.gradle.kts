@@ -33,11 +33,11 @@ android {
         val localPropsFile = project.rootProject.file("local.properties")
         val localProps = Properties()
         localProps.load(localPropsFile.inputStream())
-        val backendUrl = localProps.getProperty("backendUrl") ?: ""
+        val apiUrl = localProps.getProperty("apiUrl") ?: ""
         buildConfigField(
             "String",
-            "BACKEND_URL",
-            "\"${backendUrl}\""
+            "API_URL",
+            "\"${apiUrl}\""
         )
     }
 
@@ -78,7 +78,7 @@ dependencies {
     implementation("com.google.api-client:google-api-client-android:2.8.0")
     implementation("com.google.oauth-client:google-oauth-client-jetty:1.39.0")
     implementation("com.google.apis:google-api-services-gmail:v1-rev110-1.25.0")
-    implementation("com.google.android.gms:play-services-auth:21.3.0")
+    implementation("com.google.android.gms:play-services-auth:21.4.0")
     implementation("com.squareup.okhttp3:okhttp:5.1.0")
     implementation("com.google.code.gson:gson:2.13.1")
     implementation("androidx.credentials:credentials:1.5.0")

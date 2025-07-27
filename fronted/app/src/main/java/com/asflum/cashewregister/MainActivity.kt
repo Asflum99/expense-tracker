@@ -23,19 +23,22 @@ class MainActivity : AppCompatActivity() {
                 val result = GoogleAuthHandler.getUserIdToken(this@MainActivity)
 
                 if (!result.isSuccess) {
-                    // Manejar el caso de error
                     Toast.makeText(this@MainActivity, result.error, Toast.LENGTH_SHORT).show()
                     return@launch
                 }
 
-                val success = GmailBackendAuth.setupGmailAccess(this@MainActivity, result.idToken!!)
+                val backendResult = GmailBackendAuth.setupGmailAccess(this@MainActivity, result.idToken!!)
 
-                if (!success) {
-                    // Manejar el caso de error
+                if (!backendResult.isSuccess) {
+                    Toast.makeText(this@MainActivity, backendResult.error, Toast.LENGTH_SHORT).show()
                     return@launch
                 }
 
-                GmailService.readMessages(this@MainActivity, result.idToken)
+                val rawJson = GmailService.readMessagesAsJson(result.idToken)
+
+                val categorizedJson = BackendProcessor.categorizeExpenses(rawJson) // Cambiar nombre
+
+                JsonDownloader.downloadToDevice(this@MainActivity, categorizedJson) // Cambiar nombre
             }
         }
     }

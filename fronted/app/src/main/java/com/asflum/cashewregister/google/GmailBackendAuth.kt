@@ -18,38 +18,41 @@ import okio.IOException
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 object GmailBackendAuth {
-    enum class AuthStatus {
-        AUTHENTICATED,
-        UNAUTHENTICATED,
-        ERROR
+    sealed class AuthStatus {
+        object Authenticated : AuthStatus()
+        object Unauthenticated : AuthStatus()
+        data class Error(val message: String?) : AuthStatus()
+    }
+
+    data class AuthResult(val success: Boolean, val error: String? = null) {
+        val isSuccess: Boolean get() = success && error == null
     }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
-    private const val BACKEND_URL = BuildConfig.BACKEND_URL
+    private const val API_URL = BuildConfig.API_URL
 
     suspend fun setupGmailAccess(
         context: Context,
         idToken: String
-    ): Boolean {
+    ): AuthResult {
         return withContext(Dispatchers.IO) {
-            when (isUserAlreadyAuth(idToken)) {
-                AuthStatus.AUTHENTICATED -> {
-                    true
+            when (val status = isUserAlreadyAuth(idToken)) {
+                is AuthStatus.Authenticated -> {
+                    AuthResult(true)
                 }
 
-                AuthStatus.UNAUTHENTICATED -> {
+                is AuthStatus.Unauthenticated -> {
                     authNewUser(context, idToken)
                 }
 
-                AuthStatus.ERROR -> {
-                    false
+                is AuthStatus.Error -> {
+                    AuthResult(false, status.message)
                 }
             }
         }
@@ -61,62 +64,61 @@ object GmailBackendAuth {
         return try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    return AuthStatus.ERROR
+                    val errorMessage = response.body.string()
+                    return AuthStatus.Error(errorMessage)
                 }
                 val responseBody = response.body.string()
 
                 try {
                     val success = JSONObject(responseBody).getBoolean("authenticated")
                     if (!success) {
-                        return AuthStatus.UNAUTHENTICATED
+                        return AuthStatus.Unauthenticated
                     }
-                    AuthStatus.AUTHENTICATED
+                    AuthStatus.Authenticated
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    AuthStatus.ERROR
+                    AuthStatus.Error(e.message)
                 }
             }
         } catch (e: IOException) {
             e.printStackTrace()
-            AuthStatus.ERROR
+            AuthStatus.Error(e.message)
         }
     }
 
     private suspend fun authNewUser(
         context: Context,
         idToken: String
-    ): Boolean = suspendCoroutine { continuation ->
+    ): AuthResult = suspendCoroutine { continuation ->
         val request = createRequest(idToken, "google")
 
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    continuation.resumeWithException(IOException("Auth failed"))
+                    val errorMessage = response.body.string()
+                    continuation.resume(AuthResult(false, errorMessage))
                     return@use
                 }
 
                 val responseBody = response.body.string()
                 val jsonResponse = JSONObject(responseBody)
-
                 val authUrl = jsonResponse.getString("auth_url")
 
-                // ✅ Registrar primero el receiver
                 val receiver = object : BroadcastReceiver() {
                     override fun onReceive(ctx: Context?, intent: Intent?) {
-                        continuation.resume(true)
+                        continuation.resume(AuthResult(true))
                         LocalBroadcastManager.getInstance(context).unregisterReceiver(this)
                     }
                 }
                 LocalBroadcastManager.getInstance(context)
                     .registerReceiver(receiver, IntentFilter("cashew.AUTH_COMPLETE"))
 
-                // ✅ Luego lanzar el navegador
                 val customTabsIntent = CustomTabsIntent.Builder().build()
                 customTabsIntent.launchUrl(context, authUrl.toUri())
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            false
+            continuation.resume(AuthResult(false, e.message ?: "Unexpected error"))
         }
     }
 
@@ -127,7 +129,7 @@ object GmailBackendAuth {
 
         val requestBody = json.toString().toRequestBody("application/json".toMediaType())
         return Request.Builder()
-            .url("${BACKEND_URL}/users/auth/$task")
+            .url("${API_URL}/users/auth/$task")
             .post(requestBody)
             .build()
     }
