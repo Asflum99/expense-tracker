@@ -12,7 +12,7 @@ CLIENT_SECRET: str | None = os.environ.get("CLIENT_SECRET")
 
 
 class BcpEmailStrategy(EmailStrategy):
-    def process_messages(
+    async def process_messages(
         self, after, before, refresh_token, sub, headers, db
     ) -> list[dict]:
         query = f"(from:notificaciones@notificacionesbcp.com.pe after:{after} before:{before})"
@@ -47,8 +47,8 @@ class BcpEmailStrategy(EmailStrategy):
                     .where(Users.sub == sub)
                     .values(access_token=new_access_token)
                 )
-                db.execute(stmt)
-                db.commit()
+                await db.execute(stmt)
+                await db.commit()
 
                 headers["Authorization"] = f"Bearer {new_access_token}"
             else:

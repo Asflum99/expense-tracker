@@ -13,7 +13,7 @@ CLIENT_SECRET: str | None = os.environ.get("CLIENT_SECRET")
 
 
 class ScotiabankEmailStrategy(EmailStrategy):
-    def process_messages(
+    async def process_messages(
         self, after, before, refresh_token, sub, headers, db
     ) -> list[dict]:
         query = f"(from:bancadigital@scotiabank.com.pe after:{after} before:{before})"
@@ -49,8 +49,8 @@ class ScotiabankEmailStrategy(EmailStrategy):
                     .where(Users.sub == sub)
                     .values(access_token=new_access_token)
                 )
-                db.execute(stmt)
-                db.commit()
+                await db.execute(stmt)
+                await db.commit()
 
                 headers = {"Authorization": f"Bearer {new_access_token}"}
             else:
@@ -90,7 +90,11 @@ class ScotiabankEmailStrategy(EmailStrategy):
 
             # Extraer año
             year_1 = payload.get("headers")
-            year_2 = year_1[17]
+            year_2 = {}
+            for i in year_1:
+                if i["name"] == "Date":
+                    year_2 = i
+                    break
             year_3 = year_2.get("value")
             exact_year = re.search(r"(?<![-\d])\d{4}(?!\d)", year_3).group()
 

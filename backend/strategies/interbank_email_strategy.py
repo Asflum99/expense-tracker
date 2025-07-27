@@ -13,7 +13,7 @@ CLIENT_SECRET: str | None = os.environ.get("CLIENT_SECRET")
 
 
 class InterbankEmailStrategy(EmailStrategy):
-    def process_messages(
+    async def process_messages(
         self, after, before, refresh_token, sub, headers, db
     ) -> list[dict]:
         query = f"(from:servicioalcliente@netinterbank.com.pe after:{after} before:{before})"
@@ -49,8 +49,8 @@ class InterbankEmailStrategy(EmailStrategy):
                     .where(Users.sub == sub)
                     .values(access_token=new_access_token)
                 )
-                db.execute(stmt)
-                db.commit()
+                await db.execute(stmt)
+                await db.commit()
 
                 headers: dict[str, str] = {
                     "Authorization": f"Bearer {new_access_token}"

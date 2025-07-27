@@ -94,7 +94,7 @@ async def read_gmail_messages(sub, db: AsyncSession) -> list[dict]:
     movements_list: list[dict] = []
 
     for strategy in strategies:
-        dicts_to_add = strategy.process_messages(
+        dicts_to_add = await strategy.process_messages(
             after, before, refresh_token, sub, headers, db
         )
         if not dicts_to_add:
