@@ -1,4 +1,4 @@
-package com.asflum.cashewregister.google
+package com.asflum.cashewregister.google.gmail
 
 import com.asflum.cashewregister.BuildConfig
 import kotlinx.coroutines.Dispatchers

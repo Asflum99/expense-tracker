@@ -5,9 +5,8 @@ import androidx.appcompat.app.AppCompatActivity
 import android.widget.Button
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
-import com.asflum.cashewregister.google.GmailBackendAuth
-import com.asflum.cashewregister.google.GmailService
-import com.asflum.cashewregister.google.GoogleAuthHandler
+import com.asflum.cashewregister.google.gmail.GmailAccessManager
+import com.asflum.cashewregister.google.gmail.GmailExpenseSyncManager
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -20,25 +19,13 @@ class MainActivity : AppCompatActivity() {
         val recordExpensesButton = findViewById<Button>(R.id.recordExpenses)
         recordExpensesButton.setOnClickListener {
             lifecycleScope.launch {
-                val result = GoogleAuthHandler.getUserIdToken(this@MainActivity)
-
-                if (!result.isSuccess) {
-                    Toast.makeText(this@MainActivity, result.error, Toast.LENGTH_SHORT).show()
+                val tokenResult = GmailAccessManager.authenticateAndSetup(this@MainActivity)
+                if (tokenResult.isFailure) {
+                    Toast.makeText(this@MainActivity, tokenResult.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
                     return@launch
                 }
 
-                val backendResult = GmailBackendAuth.setupGmailAccess(this@MainActivity, result.idToken!!)
-
-                if (!backendResult.isSuccess) {
-                    Toast.makeText(this@MainActivity, backendResult.error, Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
-
-                val rawJson = GmailService.readMessagesAsJson(result.idToken)
-
-                val categorizedJson = BackendProcessor.categorizeExpenses(rawJson) // Cambiar nombre
-
-                JsonDownloader.downloadToDevice(this@MainActivity, categorizedJson) // Cambiar nombre
+                GmailExpenseSyncManager.syncAndDownloadExpenses(this@MainActivity, tokenResult.getOrThrow())
             }
         }
     }

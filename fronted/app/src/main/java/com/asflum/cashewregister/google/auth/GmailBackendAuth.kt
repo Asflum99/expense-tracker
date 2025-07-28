@@ -1,4 +1,4 @@
-package com.asflum.cashewregister.google
+package com.asflum.cashewregister.google.auth
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -21,14 +21,9 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 object GmailBackendAuth {
-    sealed class AuthStatus {
-        object Authenticated : AuthStatus()
-        object Unauthenticated : AuthStatus()
-        data class Error(val message: String?) : AuthStatus()
-    }
-
-    data class AuthResult(val success: Boolean, val error: String? = null) {
-        val isSuccess: Boolean get() = success && error == null
+    sealed class AuthStatus(val label: String) {
+        object Authenticated : AuthStatus("authenticated")
+        object Unauthenticated : AuthStatus("unauthenticated")
     }
 
     private val client = OkHttpClient.Builder()
@@ -40,64 +35,52 @@ object GmailBackendAuth {
     suspend fun setupGmailAccess(
         context: Context,
         idToken: String
-    ): AuthResult {
-        return withContext(Dispatchers.IO) {
-            when (val status = isUserAlreadyAuth(idToken)) {
-                is AuthStatus.Authenticated -> {
-                    AuthResult(true)
-                }
+    ): Result<String> {
+        return try {
+            withContext(Dispatchers.IO) {
+                when (isUserAlreadyAuth(idToken)) {
+                    is AuthStatus.Authenticated -> {
+                        Result.success(AuthStatus.Authenticated.label)
+                    }
 
-                is AuthStatus.Unauthenticated -> {
-                    authNewUser(context, idToken)
-                }
-
-                is AuthStatus.Error -> {
-                    AuthResult(false, status.message)
+                    is AuthStatus.Unauthenticated -> {
+                        authNewUser(context, idToken)
+                    }
                 }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
         }
     }
 
     private fun isUserAlreadyAuth(idToken: String): AuthStatus {
         val request = createRequest(idToken, "status")
 
-        return try {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val errorMessage = response.body.string()
-                    return AuthStatus.Error(errorMessage)
-                }
-                val responseBody = response.body.string()
-
-                try {
-                    val success = JSONObject(responseBody).getBoolean("authenticated")
-                    if (!success) {
-                        return AuthStatus.Unauthenticated
-                    }
-                    AuthStatus.Authenticated
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    AuthStatus.Error(e.message)
-                }
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("Error de conexión. Intente de nuevo.")
             }
-        } catch (e: IOException) {
-            e.printStackTrace()
-            AuthStatus.Error(e.message)
+
+            val responseBody = response.body.string()
+            val success = JSONObject(responseBody).getBoolean("authenticated")
+            if (!success) {
+                return AuthStatus.Unauthenticated
+            }
+            return AuthStatus.Authenticated
         }
     }
 
     private suspend fun authNewUser(
         context: Context,
         idToken: String
-    ): AuthResult = suspendCoroutine { continuation ->
+    ): Result<String> = suspendCoroutine { continuation ->
         val request = createRequest(idToken, "google")
 
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    val errorMessage = response.body.string()
-                    continuation.resume(AuthResult(false, errorMessage))
-                    return@use
+                    throw IOException("Error de conexión. Intente de nuevo.")
                 }
 
                 val responseBody = response.body.string()
@@ -106,7 +89,7 @@ object GmailBackendAuth {
 
                 val receiver = object : BroadcastReceiver() {
                     override fun onReceive(ctx: Context?, intent: Intent?) {
-                        continuation.resume(AuthResult(true))
+                        continuation.resume(Result.success(AuthStatus.Authenticated.label))
                         LocalBroadcastManager.getInstance(context).unregisterReceiver(this)
                     }
                 }
@@ -117,8 +100,7 @@ object GmailBackendAuth {
                 customTabsIntent.launchUrl(context, authUrl.toUri())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
-            continuation.resume(AuthResult(false, e.message ?: "Unexpected error"))
+            continuation.resume(Result.failure(e))
         }
     }
 

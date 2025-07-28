@@ -22,7 +22,7 @@
         </activity>
 
         <activity
-            android:name=".google.GoogleAuthCallbackActivity"
+            android:name=".google.auth.GoogleAuthCallbackActivity"
             android:exported="true"
             android:launchMode="singleTask">
             <intent-filter>

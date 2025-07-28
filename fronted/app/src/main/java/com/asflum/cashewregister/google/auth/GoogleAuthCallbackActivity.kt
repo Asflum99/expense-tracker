@@ -1,4 +1,4 @@
-package com.asflum.cashewregister.google
+package com.asflum.cashewregister.google.auth
 
 import android.content.Intent
 import android.os.Bundle
