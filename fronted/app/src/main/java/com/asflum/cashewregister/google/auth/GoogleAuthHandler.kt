@@ -26,7 +26,6 @@ object GoogleAuthHandler {
             val idToken = extractIdTokenFromCredential(credential)
             Result.success(idToken)
         } catch (e: Exception) {
-            e.printStackTrace()
             Result.failure(e)
         }
     }

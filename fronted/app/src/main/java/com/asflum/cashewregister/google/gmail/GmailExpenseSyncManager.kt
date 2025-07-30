@@ -1,16 +1,22 @@
 package com.asflum.cashewregister.google.gmail
 
 import android.content.Context
+import android.net.Uri
 import com.asflum.cashewregister.BackendProcessor
-import com.asflum.cashewregister.JsonDownloader
+import com.asflum.cashewregister.FileDownloader
 
 object GmailExpenseSyncManager {
 
-    suspend fun syncAndDownloadExpenses(context: Context, idToken: String) {
-        val rawJson = GmailService.readMessagesAsJson(idToken)
+    suspend fun syncAndDownloadExpenses(context: Context, idToken: String): Result<String> {
+        val messagesResult = GmailService.readMessages(idToken)
+        if (messagesResult.isFailure) return messagesResult
 
-        val categorizedJson = BackendProcessor.categorizeExpenses(rawJson)
+        val processResult = BackendProcessor.processExpenses(messagesResult.toString())
+        if (processResult.isFailure) return processResult
 
-        JsonDownloader.downloadToDevice(context, categorizedJson)
+        val downloadResult = FileDownloader.downloadToDevice(context, processResult.toString())
+        if (downloadResult.isFailure) return downloadResult
+
+        return downloadResult
     }
 }

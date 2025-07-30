@@ -25,7 +25,12 @@ class MainActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                GmailExpenseSyncManager.syncAndDownloadExpenses(this@MainActivity, tokenResult.getOrThrow())
+                val syncResult = GmailExpenseSyncManager.syncAndDownloadExpenses(this@MainActivity, tokenResult.toString())
+                if (syncResult.isFailure) {
+                    Toast.makeText(this@MainActivity, syncResult.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                Toast.makeText(this@MainActivity, syncResult.toString(), Toast.LENGTH_SHORT).show()
             }
         }
     }
