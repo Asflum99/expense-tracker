@@ -10,5 +10,6 @@ class GoogleAuthCallbackActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val intent = Intent("cashew.AUTH_COMPLETE")
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        finish()
     }
 }
