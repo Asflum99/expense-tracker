@@ -33,7 +33,8 @@ object GmailService {
             }
 
             if (response.isSuccessful) {
-                Result.success(response.body.string())
+                val bodyString = response.body.string()
+                Result.success(bodyString)
             } else {
                 Result.failure(Exception("Error del servidor: ${response.code}"))
             }

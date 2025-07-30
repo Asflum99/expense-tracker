@@ -27,7 +27,8 @@ object BackendProcessor {
                 client.newCall(request).execute()
             }
 
-            Result.success(response.body.toString())
+            val bodyString = response.body.string()
+            Result.success(bodyString)
         } catch (_: IOException) {
             Result.failure(Exception("Error de red. Revise su conexión e intente de nuevo."))
         } catch (e: Exception) {

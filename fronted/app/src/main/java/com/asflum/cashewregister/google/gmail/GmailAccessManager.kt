@@ -10,9 +10,11 @@ object GmailAccessManager {
         val tokenResult = GoogleAuthHandler.getUserIdToken(context)
         if (tokenResult.isFailure) return tokenResult
 
-        val backendResult = GmailBackendAuth.setupGmailAccess(context, tokenResult.toString())
+        val idToken = tokenResult.getOrNull() ?: return Result.failure(Exception("No se pudo obtener el token del usuario."))
+
+        val backendResult = GmailBackendAuth.setupGmailAccess(context, idToken)
         if (backendResult.isFailure) return backendResult
 
-        return Result.success(tokenResult.toString())
+        return Result.success(idToken)
     }
 }

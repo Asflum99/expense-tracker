@@ -22,7 +22,7 @@ object FileDownloader {
             val fileName = "Gastos_$formattedDate.csv"
 
             val contentValues = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, "$fileName.csv")
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
                 put(MediaStore.Downloads.MIME_TYPE, "text/csv")
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }

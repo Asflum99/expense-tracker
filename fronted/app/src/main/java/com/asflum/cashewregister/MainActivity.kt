@@ -19,18 +19,41 @@ class MainActivity : AppCompatActivity() {
         val recordExpensesButton = findViewById<Button>(R.id.recordExpenses)
         recordExpensesButton.setOnClickListener {
             lifecycleScope.launch {
-                val tokenResult = GmailAccessManager.authenticateAndSetup(this@MainActivity)
-                if (tokenResult.isFailure) {
-                    Toast.makeText(this@MainActivity, tokenResult.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
+                try {
+                    val tokenResult = GmailAccessManager.authenticateAndSetup(this@MainActivity)
+                    if (tokenResult.isFailure) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            tokenResult.exceptionOrNull()?.message,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@launch
+                    }
 
-                val syncResult = GmailExpenseSyncManager.syncAndDownloadExpenses(this@MainActivity, tokenResult.toString())
-                if (syncResult.isFailure) {
-                    Toast.makeText(this@MainActivity, syncResult.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
-                    return@launch
+                    val idToken = tokenResult.getOrNull()!!
+                    val syncResult =
+                        GmailExpenseSyncManager.syncAndDownloadExpenses(this@MainActivity, idToken)
+                    if (syncResult.isFailure) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            syncResult.exceptionOrNull()?.message,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@launch
+                    }
+
+                    Toast.makeText(
+                        this@MainActivity,
+                        syncResult.getOrNull(),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Error inesperado: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
-                Toast.makeText(this@MainActivity, syncResult.toString(), Toast.LENGTH_SHORT).show()
             }
         }
     }
