@@ -109,7 +109,7 @@ async def oauth2callback(
             <head><title>Redirigiendo...</title></head>
             <body>
                 <script>
-                    window.location.href = "cashew://oauth2callback";
+                    window.location.href = "expensetracker://oauth2callback";
                 </script>
                 <h1>Ya puedes cerrar esta ventana.</h1>
             </body>

@@ -21,3 +21,8 @@ app.include_router(oauth2callback.router)
 app.include_router(read_messages.router)
 app.include_router(process_expenses.router)
 app.include_router(router)
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
