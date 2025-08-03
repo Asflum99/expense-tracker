@@ -2,7 +2,6 @@ import 'package:expense_tracker/utils/result.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:app_links/app_links.dart';
 import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -33,28 +32,39 @@ class GmailBackend {
   }
 
   Future<Result<String>> _authNewUser(String idToken) async {
-    final response = await _getHttpResponse(idToken, 'google');
     try {
-      final authUrl = jsonDecode(response.body)['auth_url'];
-      final completer = Completer<Result<String>>();
-      final appLinks = AppLinks();
+      final response = await _getHttpResponse(idToken, 'google');
+      final responseData = jsonDecode(response.body);
+      final authUrl = responseData['auth_url'];
+      final sessionId = responseData['session_id']; // NUEVO
 
-      StreamSubscription? sub;
+      print('🚀 Lanzando URL: $authUrl');
+      launchUrl(Uri.parse(authUrl), mode: LaunchMode.inAppBrowserView);
 
-      sub = appLinks.uriLinkStream.listen((uri) {
-        if (uri.scheme == 'expense_tracker' && uri.host == 'auth_complete') {
-          completer.complete(Result.success('authenticated'));
-          sub?.cancel();
+      // Polling cada 2 segundos
+      for (int i = 0; i < 60; i++) {
+        // 2 minutos máximo
+        await Future.delayed(Duration(seconds: 2));
+
+        final statusResponse = await http.get(
+          Uri.parse('$apiUrl/users/auth/status/$sessionId'),
+        );
+
+        if (statusResponse.statusCode == 200) {
+          final status = jsonDecode(statusResponse.body)['status'];
+          print('📊 Estado actual: $status');
+
+          if (status == 'completed') {
+            print('✅ Autenticación completada!');
+            return Result.success('authenticated');
+          }
         }
-      });
+      }
 
-      launchUrl(Uri.parse(authUrl), mode: LaunchMode.externalApplication);
-
-      return completer.future;
+      return Result.failure(Exception('Timeout de autenticación'));
     } catch (e) {
-      return Result.failure(
-        Exception('Revise su conexión a internet e intente de nuevo.'),
-      );
+      print('💥 Error: $e');
+      return Result.failure(Exception('Error de autenticación: $e'));
     }
   }
 
