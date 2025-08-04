@@ -54,12 +54,16 @@ async def process_expenses(request: Request, db: AsyncSession = Depends(get_db))
         return chat_completion.choices[0].message.content
 
     async def obtain_category(obj, db: AsyncSession):
-        result = await db.execute(
-            select(Beneficiaries.category).where(
-                Beneficiaries.name == obj["beneficiary"]
+        try:
+            result = await db.execute(
+                select(Beneficiaries.category).where(
+                    Beneficiaries.name == obj["beneficiary"]
+                )
             )
-        )
-        beneficiary = result.scalar_one_or_none()
+            beneficiary = result.scalar_one_or_none()
+        except Exception as e:
+            print(f"DB error: {e}")
+            raise
         if beneficiary is not None:
             return beneficiary
         else:
