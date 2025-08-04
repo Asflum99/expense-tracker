@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from models import OAuthSession, Users
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.dialects.postgresql import insert
 from pydantic import BaseModel
 from typing import Optional
@@ -26,7 +26,8 @@ class OAuth2CallbackParams(BaseModel):
 
 @router.get("/oauth2callback")
 async def oauth2callback(
-    params: OAuth2CallbackParams = Depends(), db: AsyncSession = Depends(get_db)
+    params: OAuth2CallbackParams = Depends(),
+    db: AsyncSession = Depends(get_db),
 ):
     def exchange_code_for_token(
         client_id, client_secret, code, code_verifier, redirect_uri
@@ -51,22 +52,43 @@ async def oauth2callback(
                 )
             return result
         else:
-            raise HTTPException(f"Token exchange failed: {response.text}")
+            raise HTTPException(
+                status_code=401, detail=f"Token exchange failed: {response.text}"
+            )
 
     code = params.code
     state = params.state
     error = params.error
 
     if error:
+        # Buscar session_id usando state
+        result = await db.execute(
+            select(OAuthSession.session_id).where(OAuthSession.state == state)
+        )
+        session_id = result.scalar_one_or_none()
+        if session_id:
+            await db.execute(
+                update(OAuthSession)
+                .where(OAuthSession.session_id == session_id)
+                .values(status="failed")
+            )
+            await db.commit()
         raise HTTPException(status_code=400, detail=f"Authorization failed: {error}")
 
     if not code:
         raise HTTPException(status_code=400, detail="Missing code")
 
-    result_code_verifier = await db.execute(
-        select(OAuthSession.code_verifier).where(OAuthSession.state == state)
+    result = await db.execute(
+        select(OAuthSession.code_verifier, OAuthSession.sub, OAuthSession.session_id)
+        .where(OAuthSession.state == state)
     )
-    code_verifier = result_code_verifier.scalar_one_or_none()
+    session_data = result.first()
+
+    if not session_data:
+        raise HTTPException(400, "Session not found")
+    
+    code_verifier, sub, session_id = session_data
+
     if not code_verifier:
         raise HTTPException(400, "Missing code_verifier")
 
@@ -83,7 +105,11 @@ async def oauth2callback(
             code_verifier,
             f"{API_URL}/oauth2callback",
         )
-        await db.execute(delete(OAuthSession).where(OAuthSession.state == state))
+        await db.execute(
+            update(OAuthSession)
+            .where(OAuthSession.session_id == session_id)
+            .values(status="completed")
+        )
         await db.commit()
 
         stmt = insert(Users).values(
@@ -106,12 +132,10 @@ async def oauth2callback(
 
         html_content = """
         <html>
-            <head><title>Redirigiendo...</title></head>
+            <head><title>Autenticación completada</title></head>
             <body>
-                <script>
-                    window.location.href = "cashew://oauth2callback";
-                </script>
-                <h1>Ya puedes cerrar esta ventana.</h1>
+                <h1>¡Autenticación exitosa!</h1>
+                <p>Ya puedes cerrar esta ventana y regresar a la app.</p>
             </body>
         </html>
         """

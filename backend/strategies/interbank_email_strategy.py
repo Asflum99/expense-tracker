@@ -30,7 +30,7 @@ class InterbankEmailStrategy(EmailStrategy):
 
             if refresh_token:
                 token_url = "https://oauth2.googleapis.com/token"
-                data: dict[str, str | None] = {
+                data = {
                     "client_id": WEB_CLIENT_ID,
                     "client_secret": CLIENT_SECRET,
                     "refresh_token": refresh_token,
@@ -38,23 +38,22 @@ class InterbankEmailStrategy(EmailStrategy):
                 }
 
                 response = requests.post(token_url, data)
-                new_access_token = response.json().get("access_token")
-
                 if response.status_code != 200:
                     raise Exception(f"Error al refrescar token: {response.text}")
 
-                # 🔄 Importante: Actualiza también en la base de datos el nuevo access_token
+                access_token = response.json().get("access_token")
+
+                # Actualiza el token en la DB
                 stmt = (
                     update(Users)
                     .where(Users.sub == sub)
-                    .values(access_token=new_access_token)
+                    .values(access_token=access_token)
                 )
                 await db.execute(stmt)
                 await db.commit()
 
-                headers: dict[str, str] = {
-                    "Authorization": f"Bearer {new_access_token}"
-                }
+                # Reemplaza el header sin redeclarar
+                headers["Authorization"] = f"Bearer {access_token}"
             else:
                 raise Exception(
                     "No refresh_token disponible para renovar el access_token"
@@ -68,9 +67,9 @@ class InterbankEmailStrategy(EmailStrategy):
             return []
 
         for message in message_list:
-            dict_to_send: dict[str, int | str] = {
+            dict_to_send: dict[str, float | str] = {
                 "date": "",
-                "amount": 0,
+                "amount": 0.0,
                 "category": "",
                 "title": "",
                 "note": "",
@@ -103,13 +102,21 @@ class InterbankEmailStrategy(EmailStrategy):
             body_message_text = soup.get_text(separator=" ")
             cleaned_text = " ".join(body_message_text.split())
 
-            amount_regex: float = float(
-                str(re.search(r"\d+\.\d+", cleaned_text).group())
+            amount_match = re.search(r"\d+\.\d+", cleaned_text)
+
+            if amount_match:
+                amount_regex: float = float(amount_match.group())
+            else:
+                raise ValueError("No se encontró un número decimal en el texto limpio.")
+            
+            date_match = re.search(
+                r"\d{1,2}\s\w+\s\d{4}\s\d{1,2}:\d{2}\s[AP]M", cleaned_text
             )
 
-            date_regex: str = re.search(
-                r"\d{1,2}\s\w+\s\d{4}\s\d{1,2}:\d{2}\s[AP]M", cleaned_text
-            ).group()
+            if date_match:
+                date_regex: str = date_match.group()
+            else:
+                raise ValueError("No se encontró la fecha en el texto limpio.")
 
             dt = datetime.strptime(date_regex, "%d %b %Y %I:%M %p")
 

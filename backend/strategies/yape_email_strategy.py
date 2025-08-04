@@ -105,8 +105,20 @@ class YapeEmailStrategy(EmailStrategy):
             date_regex = date_regex.replace("p. m.", "PM").replace("a. m.", "AM")
 
             # Convertir fecha a la requerida por Cashew
-            locale.setlocale(locale.LC_TIME, "es_PE.utf8")
-            dt = datetime.strptime(date_regex, "%d %B %Y - %I:%M %p")
+            spanish_to_english = {
+                "enero": "January", "febrero": "February", "marzo": "March",
+                "abril": "April", "mayo": "May", "junio": "June",
+                "julio": "July", "agosto": "August", "septiembre": "September",
+                "octubre": "October", "noviembre": "November", "diciembre": "December"
+            }
+            def parse_spanish_date(date_str: str) -> datetime:
+                for es, en in spanish_to_english.items():
+                    if es in date_str.lower():
+                        date_str = date_str.lower().replace(es, en)
+                        break
+                return datetime.strptime(date_str, "%d %B %Y - %I:%M %p")
+
+            dt = parse_spanish_date(date_regex)
             formatted = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
 
             beneficiary_regex: Match[str] | None = re.search(

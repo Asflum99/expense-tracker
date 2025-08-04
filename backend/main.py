@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from auth_google import auth_user, auth_status, oauth2callback
+from auth_google import auth_user, auth_status, oauth2callback, auth_check_status
 from gmail import read_messages
 from expenses import process_expenses
 from database import engine, Base
@@ -15,9 +15,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(auth_check_status.router)
 app.include_router(auth_user.router)
 app.include_router(auth_status.router)
 app.include_router(oauth2callback.router)
 app.include_router(read_messages.router)
 app.include_router(process_expenses.router)
 app.include_router(router)
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

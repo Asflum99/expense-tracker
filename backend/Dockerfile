@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.13-slim-bookworm
 
 # Variables para optimizar Python
 ENV PYTHONDONTWRITEBYTECODE=1
