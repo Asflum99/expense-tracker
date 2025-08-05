@@ -27,7 +27,7 @@ class GmailBackend {
         Error(message: final msg) => Result.failure(Exception(msg)),
       };
     } catch (e) {
-      return Result.failure(Exception("Ocurrió un error inesperado: $e"));
+      return Result.failure(Exception("$e"));
     }
   }
 
@@ -36,10 +36,9 @@ class GmailBackend {
       final response = await _getHttpResponse(idToken, 'google');
       final responseData = jsonDecode(response.body);
       final authUrl = responseData['auth_url'];
-      final sessionId = responseData['session_id']; // NUEVO
+      final sessionId = responseData['session_id'];
 
-      print('🚀 Lanzando URL: $authUrl');
-      launchUrl(Uri.parse(authUrl), mode: LaunchMode.inAppBrowserView);
+      launchUrl(Uri.parse(authUrl), mode: LaunchMode.externalApplication);
 
       // Polling cada 2 segundos
       for (int i = 0; i < 60; i++) {
@@ -52,10 +51,8 @@ class GmailBackend {
 
         if (statusResponse.statusCode == 200) {
           final status = jsonDecode(statusResponse.body)['status'];
-          print('📊 Estado actual: $status');
 
           if (status == 'completed') {
-            print('✅ Autenticación completada!');
             return Result.success('authenticated');
           }
         }
@@ -63,8 +60,7 @@ class GmailBackend {
 
       return Result.failure(Exception('Timeout de autenticación'));
     } catch (e) {
-      print('💥 Error: $e');
-      return Result.failure(Exception('Error de autenticación: $e'));
+      return Result.failure(Exception('$e'));
     }
   }
 

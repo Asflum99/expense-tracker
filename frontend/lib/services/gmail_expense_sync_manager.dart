@@ -6,7 +6,7 @@ import 'dart:convert';
 
 class GmailExpenseSyncManager {
   static Future<Result<String>> syncAndDownloadExpenses(String idToken) async {
-    final messagesResult = await GmailService().readMessages(idToken);
+    final messagesResult = await GmailService.readMessages(idToken);
 
     if (messagesResult.isFailure) {
       return Result.failure(messagesResult.exceptionOrNull()!);

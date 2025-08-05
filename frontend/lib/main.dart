@@ -44,7 +44,7 @@ class _HomePageState extends State<HomePage> {
 
     if (tokenResult.isFailure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: ${tokenResult.exceptionOrNull()}")),
+        SnackBar(content: Text("${tokenResult.exceptionOrNull()}")),
       );
       return;
     }
@@ -61,11 +61,11 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("${syncResult.exceptionOrNull()}")),
       );
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(syncResult.getOrNull()!)));
     }
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(syncResult.getOrNull()!)));
   }
 
   @override
@@ -81,7 +81,9 @@ class _HomePageState extends State<HomePage> {
                 onPressed: _authenticateAndSetup,
                 style: ButtonStyle(
                   foregroundColor: WidgetStateProperty.all(Colors.black),
-                  backgroundColor: WidgetStateProperty.all(const Color.fromARGB(255, 223, 223, 223)),
+                  backgroundColor: WidgetStateProperty.all(
+                    const Color.fromARGB(255, 223, 223, 223),
+                  ),
                 ),
                 child: const Text("Registrar gastos"),
               ),
