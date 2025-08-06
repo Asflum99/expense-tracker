@@ -1,0 +1,29 @@
+# Excluir archivos de Flutter web, ios, linux y macos de estadísticas
+frontend/web/* linguist-generated=true
+frontend/ios/* linguist-generated=true
+frontend/macos/* linguist-generated=true
+frontend/windows/* linguist-generated=true
+frontend/linux/* linguist-generated=true
+
+# Marcar HTML/CSS/JS como no detectables
+*.html linguist-detectable=false
+*.css linguist-detectable=false
+*.js linguist-detectable=false
+
+# Asegurar que Python y Dart sean detectados
+*.py linguist-detectable=true
+*.dart linguist-detectable=true
+
+# Marcar archivos de configuración como no detectables
+*.json linguist-detectable=false
+*.yaml linguist-detectable=false
+*.yml linguist-detectable=false
+*.toml linguist-detectable=false
+
+# Documentación
+*.md linguist-documentation=true
+
+# Otros archivos de configuración comunes
+Dockerfile linguist-detectable=false
+requirements.txt linguist-detectable=false
+.gitignore linguist-detectable=false
