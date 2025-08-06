@@ -37,7 +37,13 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  bool _isLoading = false;
+
   void _authenticateAndSetup() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     final tokenResult = await GmailAccessManager.authenticateAndSetup();
 
     if (!mounted) return;
@@ -66,30 +72,47 @@ class _HomePageState extends State<HomePage> {
         context,
       ).showSnackBar(SnackBar(content: Text(syncResult.getOrNull()!)));
     }
+
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 300),
-              child: ElevatedButton(
-                onPressed: _authenticateAndSetup,
-                style: ButtonStyle(
-                  foregroundColor: WidgetStateProperty.all(Colors.black),
-                  backgroundColor: WidgetStateProperty.all(
-                    const Color.fromARGB(255, 223, 223, 223),
+      body: Stack(
+        children: [
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 300),
+                  child: ElevatedButton(
+                    onPressed: _authenticateAndSetup,
+                    style: ButtonStyle(
+                      foregroundColor: WidgetStateProperty.all(Colors.black),
+                      backgroundColor: WidgetStateProperty.all(
+                        const Color.fromARGB(255, 223, 223, 223),
+                      ),
+                    ),
+                    child: const Text("Registrar gastos"),
                   ),
                 ),
-                child: const Text("Registrar gastos"),
+              ],
+            ),
+          ),
+          if (_isLoading)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  top: 220,
+                ),
+                child: const CircularProgressIndicator(),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
