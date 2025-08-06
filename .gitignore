@@ -4,6 +4,9 @@ mock.json
 *.pyc
 *.csv
 .vscode
+dev_tools/
+__pycache__/
+pyrefly.toml
 
 # Android Studio
 frontend/*.iml

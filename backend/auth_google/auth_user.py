@@ -7,7 +7,7 @@ from logging import Logger
 from database import get_db
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from models import OAuthSession
+from backend.models import OAuthSession
 from datetime import datetime, timedelta, timezone
 import base64, urllib, uuid, hashlib, secrets, string, logging, os, urllib.parse
 

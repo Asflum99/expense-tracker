@@ -13,9 +13,9 @@ from strategies.interbank_email_strategy import InterbankEmailStrategy
 from strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
 from strategies.bcp_email_strategy import BcpEmailStrategy
 from pydantic import BaseModel
-from models import Users
+from backend.models import Users
 from zoneinfo import ZoneInfo
-import logging, os
+import logging, os, locale
 
 
 router: APIRouter = APIRouter()
@@ -33,7 +33,6 @@ class TokenBody(BaseModel):
 async def read_messages(
     token_body: TokenBody, db: AsyncSession = Depends(get_db)
 ) -> list[dict]:
-
     try:
         token = token_body.id_token
 
@@ -45,7 +44,8 @@ async def read_messages(
         return await read_gmail_messages(sub, db)
 
     except ValueError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token")
+        print(f"{str(e)}")
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     except Exception as e:
         logger.error(f"Auth error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
@@ -68,9 +68,6 @@ async def read_gmail_messages(sub, db: AsyncSession) -> list[dict]:
     tz = ZoneInfo('America/Lima')
 
     # Medianoche en UTC-5
-    midnight_yesterday: datetime = datetime.now(tz).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    ) - timedelta(days=1)
     midnight_today: datetime = datetime.now(tz).replace(
         hour=0, minute=0, second=0, microsecond=0
     )

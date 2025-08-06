@@ -2,9 +2,9 @@ from strategies.email_strategy_interface import EmailStrategy
 from dotenv import load_dotenv
 from datetime import datetime
 from typing import Match, Any
-from models import Users
+from backend.models import Users
 from sqlalchemy import update
-import requests, os, re, base64, locale
+import requests, os, re, base64
 
 load_dotenv()
 WEB_CLIENT_ID: str | None = os.environ.get("WEB_CLIENT_ID")
@@ -65,9 +65,9 @@ class YapeEmailStrategy(EmailStrategy):
             return []
 
         for message in message_list:
-            dict_to_send: dict[str, int | str] = {
+            dict_to_send: dict[str, float | str] = {
                 "date": "",
-                "amount": 0,
+                "amount": 0.0,
                 "category": "",
                 "title": "",
                 "note": "",
@@ -91,46 +91,30 @@ class YapeEmailStrategy(EmailStrategy):
                 "utf-8"
             )
 
-            amount_regex: Match[str] = re.search(r"\d+\.\d+", message_body_decoded)
+            amount_regex: Match[str] | None = re.search(
+                r"\d+\.\d+", message_body_decoded
+            )
             if amount_regex:
-                amount_regex: float = float(amount_regex.group())
+                amount: float = float(amount_regex.group())
+                dict_to_send["amount"] = -amount
 
             date_regex: Match[str] | None = re.search(
                 r"(\d{1,2}\s\w+\s\d{4})\s-\s(\d{2}:\d{2}\s[ap]\.\sm\.)",
                 message_body_decoded,
             )
             if date_regex:
-                date_regex: str = str(date_regex.group())
-
-            date_regex = date_regex.replace("p. m.", "PM").replace("a. m.", "AM")
-
-            # Convertir fecha a la requerida por Cashew
-            spanish_to_english = {
-                "enero": "January", "febrero": "February", "marzo": "March",
-                "abril": "April", "mayo": "May", "junio": "June",
-                "julio": "July", "agosto": "August", "septiembre": "September",
-                "octubre": "October", "noviembre": "November", "diciembre": "December"
-            }
-            def parse_spanish_date(date_str: str) -> datetime:
-                for es, en in spanish_to_english.items():
-                    if es in date_str.lower():
-                        date_str = date_str.lower().replace(es, en)
-                        break
-                return datetime.strptime(date_str, "%d %B %Y - %I:%M %p")
-
-            dt = parse_spanish_date(date_regex)
-            formatted = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+                date = date_regex.group()
+                date = date.replace("a. m.", "AM").replace("p. m.", "PM")
+                dt = datetime.strptime(date, "%d %B %Y - %I:%M %p")
+                formatted = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+                dict_to_send["date"] = formatted
 
             beneficiary_regex: Match[str] | None = re.search(
                 r"Nombre del Beneficiario\s([^\r\n]+)", message_body_decoded
             )
             if beneficiary_regex:
-                beneficiary_regex: str = str(beneficiary_regex.group(1))
-
-            # Guardar los datos en el diccionario
-            dict_to_send["amount"] = -amount_regex
-            dict_to_send["date"] = formatted
-            dict_to_send["beneficiary"] = beneficiary_regex
+                beneficiary: str = str(beneficiary_regex.group(1))
+                dict_to_send["beneficiary"] = beneficiary
 
             movements_list.append(dict_to_send)
 

@@ -1,7 +1,7 @@
 from fastapi import HTTPException, APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
-from models import OAuthSession
+from backend.models import OAuthSession
 from sqlalchemy import select, delete
 
 router = APIRouter()

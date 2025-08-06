@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert
-from models import Beneficiaries
+from backend.models import Beneficiaries
 from database import get_db
 from groq import Groq
 from dotenv import load_dotenv

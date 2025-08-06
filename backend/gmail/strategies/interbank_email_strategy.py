@@ -1,22 +1,22 @@
 from strategies.email_strategy_interface import EmailStrategy
 from dotenv import load_dotenv
-from datetime import datetime
-from typing import Match, Any
 from bs4 import BeautifulSoup
+from typing import Match, Any
+from datetime import datetime
 from sqlalchemy import update
-from models import Users
-import requests, os, re, base64
+from backend.models import Users
+import requests, os, re, base64, locale
 
 load_dotenv()
 WEB_CLIENT_ID: str | None = os.environ.get("WEB_CLIENT_ID")
 CLIENT_SECRET: str | None = os.environ.get("CLIENT_SECRET")
 
 
-class ScotiabankEmailStrategy(EmailStrategy):
+class InterbankEmailStrategy(EmailStrategy):
     async def process_messages(
         self, after, before, refresh_token, sub, headers, db
     ) -> list[dict]:
-        query = f"(from:bancadigital@scotiabank.com.pe after:{after} before:{before})"
+        query = f"(from:servicioalcliente@netinterbank.com.pe after:{after} before:{before})"
 
         while True:
             search_response = requests.get(
@@ -30,7 +30,7 @@ class ScotiabankEmailStrategy(EmailStrategy):
 
             if refresh_token:
                 token_url = "https://oauth2.googleapis.com/token"
-                data: dict[str, str | None] = {
+                data = {
                     "client_id": WEB_CLIENT_ID,
                     "client_secret": CLIENT_SECRET,
                     "refresh_token": refresh_token,
@@ -38,21 +38,22 @@ class ScotiabankEmailStrategy(EmailStrategy):
                 }
 
                 response = requests.post(token_url, data)
-                new_access_token = response.json().get("access_token")
-
                 if response.status_code != 200:
                     raise Exception(f"Error al refrescar token: {response.text}")
 
-                # 🔄 Importante: Actualiza también en la base de datos el nuevo access_token
+                access_token = response.json().get("access_token")
+
+                # Actualiza el token en la DB
                 stmt = (
                     update(Users)
                     .where(Users.sub == sub)
-                    .values(access_token=new_access_token)
+                    .values(access_token=access_token)
                 )
                 await db.execute(stmt)
                 await db.commit()
 
-                headers = {"Authorization": f"Bearer {new_access_token}"}
+                # Reemplaza el header sin redeclarar
+                headers["Authorization"] = f"Bearer {access_token}"
             else:
                 raise Exception(
                     "No refresh_token disponible para renovar el access_token"
@@ -66,14 +67,14 @@ class ScotiabankEmailStrategy(EmailStrategy):
             return []
 
         for message in message_list:
-            dict_to_send: dict[str, int | str] = {
+            dict_to_send: dict[str, float | str] = {
                 "date": "",
-                "amount": 0,
+                "amount": 0.0,
                 "category": "",
                 "title": "",
                 "note": "",
                 "beneficiary": "",
-                "account": "Scotiabank",
+                "account": "Interbank",
             }
             message_id: Any = message["id"]
             message_response = requests.get(
@@ -85,21 +86,15 @@ class ScotiabankEmailStrategy(EmailStrategy):
             payload = full_message.get("payload", {})
             parts_1 = payload.get("parts", [])
             parts_2 = parts_1[0]
-            parts_3 = parts_2.get("body", [])
-            message_body = parts_3.get("data", {})
+            parts_3 = parts_2.get("parts", [])
+            parts_4 = parts_3[0]
+            parts_5 = parts_4.get("body", {})
 
-            # Extraer año
-            year_1 = payload.get("headers")
-            year_2 = {}
-            for i in year_1:
-                if i["name"] == "Date":
-                    year_2 = i
-                    break
-            year_3 = year_2.get("value")
-            exact_year = re.search(r"(?<![-\d])\d{4}(?!\d)", year_3).group()
+            message_body_coded = parts_5.get("data")
 
+            # Decodificando el contenido del correo
             message_body_decoded = base64.urlsafe_b64decode(
-                message_body + "=" * (-len(message_body) % 4)
+                message_body_coded + "=" * (-len(message_body_coded) % 4)
             )
             decoded_html = message_body_decoded.decode("utf-8")
 
@@ -107,23 +102,38 @@ class ScotiabankEmailStrategy(EmailStrategy):
             body_message_text = soup.get_text(separator=" ")
             cleaned_text = " ".join(body_message_text.split())
 
-            amount_regex = float(re.search(r"\d+\.\d+", cleaned_text).group())
+            amount_match = re.search(r"\d+\.\d+", cleaned_text)
 
-            date_regex: Match[str] | None = re.search(
-                r"\d{1,2}\s\w+[,\.]+\s\d{2}:\d{2}\s[ap]m", cleaned_text
-            ).group()
+            if amount_match:
+                amount_regex: float = float(amount_match.group())
+            else:
+                raise ValueError("No se encontró un número decimal en el texto limpio.")
+            
+            date_match = re.search(
+                r"\d{1,2}\s\w+\s\d{4}\s\d{1,2}:\d{2}\s[AP]M", cleaned_text
+            )
 
-            # Transformar a la pedida por Cashew
-            date_complete = f"{exact_year} {date_regex}"
-            clean_date = date_complete.replace(".", "").replace(",", "")
+            if date_match:
+                date_regex: str = date_match.group()
+            else:
+                raise ValueError("No se encontró la fecha en el texto limpio.")
 
-            dt = datetime.strptime(clean_date, "%Y %d %b %I:%M %p")
+            date_parts = date_regex.split()
+            date_parts[1] = date_parts[1].lower()  # Solo el mes (segunda palabra)
+            date_regex_fixed = ' '.join(date_parts)
 
-            real_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+            try:
+                locale.setlocale(locale.LC_TIME, 'es_PE.UTF-8')
+            except locale.Error:
+            # Si falla, el sistema ya debería tener es_PE por defecto
+                pass
+
+            dt = datetime.strptime(date_regex_fixed, "%d %b %Y %I:%M %p")
+
+            formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
 
             beneficiary_regex: Match[str] | None = re.search(
-                r"Enviado a:\s*((?!\d)[A-ZÁÉÍÓÚÑa-záéíóúñ\s]+?)(?=\s(?:Con|S\/|\d|$))",
-                cleaned_text,
+                r"Destinatario:\s(.+?)\sDestino:", cleaned_text
             )
             if beneficiary_regex:
                 beneficiary: str | Any = beneficiary_regex.group(1)
@@ -132,7 +142,7 @@ class ScotiabankEmailStrategy(EmailStrategy):
 
             # Guardar los datos en el diccionario
             dict_to_send["amount"] = -amount_regex
-            dict_to_send["date"] = real_time
+            dict_to_send["date"] = formatted_time
             dict_to_send["beneficiary"] = beneficiary
 
             movements_list.append(dict_to_send)

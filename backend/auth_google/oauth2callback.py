@@ -1,7 +1,7 @@
 from fastapi import HTTPException, APIRouter, Depends
 from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
-from models import OAuthSession, Users
+from backend.models import OAuthSession, Users
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update
