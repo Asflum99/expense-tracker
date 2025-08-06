@@ -7,7 +7,8 @@ from logging import Logger
 from database import get_db
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from models import OAuthSession
+from backend.models import OAuthSession
+from datetime import datetime, timedelta, timezone
 import base64, urllib, uuid, hashlib, secrets, string, logging, os, urllib.parse
 
 router = APIRouter()
@@ -65,21 +66,32 @@ async def google_auth(token_body: TokenBody, db: AsyncSession = Depends(get_db))
         code_verifier = generate_code_verifier()
         code_challenge = generate_code_challenge(code_verifier)
         state = str(uuid.uuid4())
+        session_id = str(uuid.uuid4())
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+
         await db.execute(
             insert(OAuthSession).values(
-                sub=sub, code_verifier=code_verifier, state=state
+                sub=sub, 
+                code_verifier=code_verifier, 
+                state=state,
+                session_id=session_id,
+                status="pending",
+                expires_at=expires_at  # NUEVO
             )
         )
         await db.commit()
         auth_url = build_google_auth_url(
             WEB_CLIENT_ID,
-            f"{API_URL}/oauth2callback",
+            f"{API_URL}/oauth2callback",  # MODIFICADO
             "https://www.googleapis.com/auth/gmail.readonly",
             code_challenge,
             state,
         )
 
-        return {"auth_url": auth_url}
+        return {
+            "auth_url": auth_url,
+            "session_id": session_id  # NUEVO
+        }
 
     except ValueError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token")

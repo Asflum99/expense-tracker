@@ -4,7 +4,7 @@ from google.oauth2 import id_token
 from dotenv import load_dotenv
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from models import Users
+from backend.models import Users
 from database import get_db
 from pydantic import BaseModel
 import logging, os

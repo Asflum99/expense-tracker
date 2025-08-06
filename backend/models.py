@@ -3,12 +3,15 @@ from database import Base
 
 class OAuthSession(Base):
     __tablename__ = "oauth_sessions"
-
+    
     id = Column(Integer, primary_key=True, index=True)
     sub = Column(String, nullable=False)
     code_verifier = Column(String, nullable=False)
     state = Column(String, nullable=False, unique=True)
+    session_id = Column(String, nullable=False, unique=True, index=True)
+    status = Column(String, nullable=False, default="pending")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True))
 
 class Users(Base):
     __tablename__ = "users"
