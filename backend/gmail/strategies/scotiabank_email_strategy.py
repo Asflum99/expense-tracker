@@ -97,7 +97,7 @@ class ScotiabankEmailStrategy(EmailStrategy):
                     break
             year_3 = year_2.get("value")
             if year_3:
-                exact_year = re.search(r"(?<![-\d])\d{4}(?!\d)", year_3.decode("utf-8"))
+                exact_year = re.search(r"(?<![-\d])\d{4}(?!\d)", year_3)
                 if exact_year is not None:
                     exact_year = exact_year.group()
             else:
