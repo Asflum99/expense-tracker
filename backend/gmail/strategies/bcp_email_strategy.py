@@ -1,4 +1,4 @@
-from strategies.email_strategy_interface import EmailStrategy
+from gmail.strategies.email_strategy_interface import EmailStrategy
 from dotenv import load_dotenv
 from backend.models import Users
 from datetime import datetime
@@ -99,8 +99,10 @@ class BcpEmailStrategy(EmailStrategy):
             amount_regex = re.search(r"\d+\.\d+", cleaned_text)
 
             if amount_regex:
-                amount_regex = amount_regex.group()
-                dict_to_send["amount"] = -float(amount_regex)
+                amount = amount_regex.group()
+                dict_to_send["amount"] = -float(amount)
+            else:
+                dict_to_send["amount"] = 0
 
             date_regex = re.findall(
                 r"\d+\sde\s\w+\sde\s\d{4}\s-\s\d{2}:\d{2}\s[AP]M", cleaned_text
@@ -124,10 +126,9 @@ class BcpEmailStrategy(EmailStrategy):
             )
 
             if beneficiary_regex:
-                beneficiary_regex = beneficiary_regex.group(1)
-                dict_to_send["beneficiary"] = beneficiary_regex
+                beneficiary = beneficiary_regex.group(1)
+                dict_to_send["beneficiary"] = beneficiary
             else:
-                # Handle the case where beneficiary_regex is empty
                 beneficiary_regex = None
 
             movements_list.append(dict_to_send)

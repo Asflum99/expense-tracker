@@ -1,4 +1,4 @@
-from strategies.email_strategy_interface import EmailStrategy
+from gmail.strategies.email_strategy_interface import EmailStrategy
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from typing import Match, Any

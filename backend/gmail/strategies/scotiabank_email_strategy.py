@@ -1,4 +1,4 @@
-from strategies.email_strategy_interface import EmailStrategy
+from gmail.strategies.email_strategy_interface import EmailStrategy
 from dotenv import load_dotenv
 from datetime import datetime
 from typing import Match, Any
@@ -96,7 +96,7 @@ class ScotiabankEmailStrategy(EmailStrategy):
                     year_2 = i
                     break
             year_3 = year_2.get("value")
-            if year_3 is not None:
+            if year_3:
                 exact_year = re.search(r"(?<![-\d])\d{4}(?!\d)", year_3.decode("utf-8"))
                 if exact_year is not None:
                     exact_year = exact_year.group()
@@ -115,9 +115,9 @@ class ScotiabankEmailStrategy(EmailStrategy):
             cleaned_text = " ".join(body_message_text.split())
 
             amount_regex = re.search(r"\d+\.\d+", cleaned_text)
-            if amount_regex is not None:
-                amount_regex = float(amount_regex.group())
-                dict_to_send["amount"] = -amount_regex
+            if amount_regex:
+                amount = float(amount_regex.group())
+                dict_to_send["amount"] = -amount
 
             date_regex = re.search(
                 r"\d{1,2}\s\w+[,\.]+\s\d{2}:\d{2}\s[ap]m", cleaned_text

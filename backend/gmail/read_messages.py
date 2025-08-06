@@ -8,14 +8,15 @@ from typing import Any, Mapping
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database import get_db
-from strategies.yape_email_strategy import YapeEmailStrategy
-from strategies.interbank_email_strategy import InterbankEmailStrategy
-from strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
-from strategies.bcp_email_strategy import BcpEmailStrategy
+from gmail.strategies.email_strategy_interface import EmailStrategy
+from gmail.strategies.yape_email_strategy import YapeEmailStrategy
+from gmail.strategies.interbank_email_strategy import InterbankEmailStrategy
+from gmail.strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
+from gmail.strategies.bcp_email_strategy import BcpEmailStrategy
 from pydantic import BaseModel
 from backend.models import Users
 from zoneinfo import ZoneInfo
-import logging, os, locale
+import logging, os
 
 
 router: APIRouter = APIRouter()
@@ -81,7 +82,7 @@ async def read_gmail_messages(sub, db: AsyncSession) -> list[dict]:
     after: int = int(midnight_today.timestamp())
     before: int = int(now.timestamp())
 
-    strategies = [
+    strategies: list[EmailStrategy] = [
         InterbankEmailStrategy(),
         YapeEmailStrategy(),
         ScotiabankEmailStrategy(),

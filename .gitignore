@@ -7,6 +7,7 @@ mock.json
 dev_tools/
 __pycache__/
 pyrefly.toml
+.mypy_cache/
 
 # Android Studio
 frontend/*.iml
