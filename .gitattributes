@@ -5,6 +5,17 @@ frontend/macos/* linguist-generated=true
 frontend/windows/* linguist-generated=true
 frontend/linux/* linguist-generated=true
 
+# Lenguajes nativos de plataformas
+*.cpp linguist-detectable=false
+*.cc linguist-detectable=false
+*.c linguist-detectable=false
+*.h linguist-detectable=false
+*.swift linguist-detectable=false
+*.kt linguist-detectable=false
+*.java linguist-detectable=false
+CMakeLists.txt linguist-detectable=false
+*.cmake linguist-detectable=false
+
 # Marcar HTML/CSS/JS como no detectables
 *.html linguist-detectable=false
 *.css linguist-detectable=false
