@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:expense_tracker/services/gmail_access_manager.dart';
 import 'package:expense_tracker/services/gmail_expense_sync_manager.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 Future main() async {
   tz.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('America/Lima'));
-  await dotenv.load(fileName: ".env");
+  
   runApp(const ExpenseTrackerApp());
 }
 
@@ -49,6 +48,9 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
 
     if (tokenResult.isFailure) {
+      setState(() {
+        _isLoading = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("${tokenResult.exceptionOrNull()}")),
       );
@@ -64,6 +66,9 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
 
     if (syncResult.isFailure) {
+            setState(() {
+        _isLoading = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("${syncResult.exceptionOrNull()}")),
       );
