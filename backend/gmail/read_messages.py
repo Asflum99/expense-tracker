@@ -1,8 +1,8 @@
-from fastapi import HTTPException, APIRouter, Depends
+from fastapi import HTTPException, APIRouter, Depends, Header
 from google.oauth2 import id_token
 from google.auth.transport.requests import Request as GoogleRequest
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime
 from logging import Logger
 from typing import Any, Mapping
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,14 +14,17 @@ from gmail.strategies.interbank_email_strategy import InterbankEmailStrategy
 from gmail.strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
 from gmail.strategies.bcp_email_strategy import BcpEmailStrategy
 from pydantic import BaseModel
-from backend.models import Users
+from models import Users
 from zoneinfo import ZoneInfo
-import logging, os
+from jwt import InvalidTokenError
+import logging, os, jwt
 
 
 router: APIRouter = APIRouter()
 load_dotenv()
 WEB_CLIENT_ID: str | None = os.environ.get("WEB_CLIENT_ID")
+JWT_SECRET_KEY: str | None = os.environ.get("JWT_SECRET_KEY")
+JWT_ALGORITHM = "HS256"
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -30,19 +33,28 @@ class TokenBody(BaseModel):
     id_token: str
 
 
-@router.post("/gmail/read-messages")
+@router.get("/gmail/read-messages")
 async def read_messages(
-    token_body: TokenBody, db: AsyncSession = Depends(get_db)
+    authorization: str = Header(), db: AsyncSession = Depends(get_db)
 ) -> list[dict]:
     try:
-        token = token_body.id_token
+        if not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization header")
 
-        info: Mapping[str, Any] = id_token.verify_oauth2_token(
-            token, GoogleRequest(), WEB_CLIENT_ID
-        )
-        sub: Any | None = info.get("sub")
+        session_token = authorization.replace("Bearer ", "")
 
-        return await read_gmail_messages(sub, db)
+        try:
+            payload = jwt.decode(
+                session_token,
+                JWT_SECRET_KEY,
+                algorithms=[JWT_ALGORITHM],
+            )
+        except InvalidTokenError:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        user_sub = payload.get("sub")
+
+        return await read_gmail_messages(user_sub, db)
 
     except ValueError as e:
         print(f"{str(e)}")
@@ -66,7 +78,7 @@ async def read_gmail_messages(sub, db: AsyncSession) -> list[dict]:
     access_token, refresh_token = await get_tokens_by_sub(sub)
 
     # Zona horario de Perú (UTC-5)
-    tz = ZoneInfo('America/Lima')
+    tz = ZoneInfo("America/Lima")
 
     # Medianoche en UTC-5
     midnight_today: datetime = datetime.now(tz).replace(
@@ -86,7 +98,7 @@ async def read_gmail_messages(sub, db: AsyncSession) -> list[dict]:
         InterbankEmailStrategy(),
         YapeEmailStrategy(),
         ScotiabankEmailStrategy(),
-        BcpEmailStrategy()
+        BcpEmailStrategy(),
     ]
 
     movements_list: list[dict] = []
