@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:expense_tracker/utils/result.dart';
 
 class GoogleAuthHandler {
   static Future<Result<String>> getUserIdToken() async {
     try {
+      final String serverClientId = const String.fromEnvironment('WEB_CLIENT_ID');
       final GoogleSignIn signIn = GoogleSignIn.instance;
-      await signIn.initialize(serverClientId: dotenv.env['WEB_CLIENT_ID']!);
+      await signIn.initialize(serverClientId: serverClientId);
 
       final GoogleSignInAccount user = await signIn.authenticate(
         scopeHint: ['https://www.googleapis.com/auth/gmail.readonly'],
