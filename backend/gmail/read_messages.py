@@ -9,10 +9,7 @@ from gmail.strategies.yape_email_strategy import YapeEmailStrategy
 from gmail.strategies.interbank_email_strategy import InterbankEmailStrategy
 from gmail.strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
 from gmail.strategies.bcp_email_strategy import BcpEmailStrategy
-from pydantic import BaseModel
 from models import Users
-from zoneinfo import ZoneInfo
-from jwt import InvalidTokenError
 from pathlib import Path
 from models import Beneficiaries
 from groq import Groq
@@ -29,13 +26,11 @@ JWT_ALGORITHM = "HS256"
 logger: Logger = logging.getLogger(__name__)
 
 
-class TokenBody(BaseModel):
-    id_token: str
-
-
 @router.get("/gmail/read-messages")
 async def read_messages(
-    authorization: str = Header(), db: AsyncSession = Depends(get_db)
+    authorization: str = Header(),
+    device_time: str = Header(alias="Device-Time"),
+    db: AsyncSession = Depends(get_db),
 ) -> str:
     try:
         if not authorization.startswith("Bearer "):
@@ -43,80 +38,34 @@ async def read_messages(
 
         session_token = authorization.replace("Bearer ", "")
 
-        try:
-            payload = jwt.decode(
-                session_token,
-                JWT_SECRET_KEY,
-                algorithms=[JWT_ALGORITHM],
-            )
-        except InvalidTokenError:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        payload = jwt.decode(
+            session_token,
+            JWT_SECRET_KEY,
+            [JWT_ALGORITHM],
+        )
 
         user_sub = payload.get("sub")
 
-        original_list = await read_gmail_messages(user_sub, db)
+        access_token, refresh_token = await _get_tokens_by_sub(user_sub, db)
+
+        headers: dict[str, str] = {"Authorization": f"Bearer {access_token}"}
+
+        after, before = _get_time(device_time)
+
+        original_list = await _iterate_strategies(
+            after, before, refresh_token, user_sub, headers, db
+        )
 
         list_processed = await process_messages(original_list, db)
 
         return list_processed
 
-    except ValueError as e:
-        print(f"{str(e)}")
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    except ValueError:
+        logger.error("Token inválido")
+        raise HTTPException(status_code=401, detail=f"Token inválido.")
     except Exception as e:
-        logger.error(f"Auth error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-
-async def read_gmail_messages(sub, db: AsyncSession) -> list[dict[str | float, str]]:
-    async def get_tokens_by_sub(sub) -> tuple[str, str] | tuple[None, None]:
-        result = await db.execute(
-            select(Users.access_token, Users.refresh_token).where(Users.sub == sub)
-        )
-        tokens = result.fetchone()
-        if tokens:
-            return tokens[0], tokens[1]
-        else:
-            return None, None
-
-    access_token, refresh_token = await get_tokens_by_sub(sub)
-
-    # Zona horario de Perú (UTC-5)
-    tz = ZoneInfo("America/Lima")
-
-    # Medianoche en UTC-5
-    midnight_today: datetime = datetime.now(tz).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-
-    headers: dict[str, str] = {"Authorization": f"Bearer {access_token}"}
-
-    # Hora actual en UTC-5
-    now: datetime = datetime.now(tz)
-
-    # Convertir a timestamps
-    after: int = int(midnight_today.timestamp())
-    before: int = int(now.timestamp())
-
-    strategies: list[EmailStrategy] = [
-        InterbankEmailStrategy(),
-        YapeEmailStrategy(),
-        ScotiabankEmailStrategy(),
-        BcpEmailStrategy(),
-    ]
-
-    movements_list: list[dict] = []
-
-    for strategy in strategies:
-        dicts_to_add = await strategy.process_messages(
-            after, before, refresh_token, sub, headers, db
-        )
-        if not dicts_to_add:
-            continue
-        for dicts in dicts_to_add:
-            movements_list.append(dicts)
-
-    return movements_list
+        logger.critical(f"Error desconocido: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error desconocido.")
 
 
 async def process_messages(original_list, db: AsyncSession) -> str:
@@ -195,3 +144,51 @@ async def process_messages(original_list, db: AsyncSession) -> str:
     except Exception as e:
         cleanup()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _get_time(device_time: str) -> tuple[int, int]:
+    now = datetime.strptime(device_time, "%Y-%m-%d %H:%M:%S")
+
+    midnight_today: datetime = now.replace(hour=0, minute=0, second=0)
+
+    # Convertir a timestamps
+    after: int = int(midnight_today.timestamp())
+    before: int = int(now.timestamp())
+
+    return after, before
+
+
+async def _get_tokens_by_sub(
+    sub, db: AsyncSession
+) -> tuple[str, str] | tuple[None, None]:
+    result = await db.execute(
+        select(Users.access_token, Users.refresh_token).where(Users.sub == sub)
+    )
+    tokens = result.fetchone()
+    if tokens:
+        return tokens[0], tokens[1]
+    else:
+        return None, None
+
+
+async def _iterate_strategies(
+    after, before, refresh_token, sub, headers, db
+) -> list[dict]:
+    movements_list: list[dict] = []
+    strategies: list[EmailStrategy] = [
+        InterbankEmailStrategy(),
+        YapeEmailStrategy(),
+        ScotiabankEmailStrategy(),
+        BcpEmailStrategy(),
+    ]
+
+    for strategy in strategies:
+        dicts_to_add = await strategy.process_messages(
+            after, before, refresh_token, sub, headers, db
+        )
+        if not dicts_to_add:
+            continue
+        for dicts in dicts_to_add:
+            movements_list.append(dicts)
+
+    return movements_list

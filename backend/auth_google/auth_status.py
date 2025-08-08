@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
 from google.auth.transport.requests import Request as GoogleRequest
+from google.auth.exceptions import GoogleAuthError
 from google.oauth2 import id_token as id_token_verifier
 from sqlalchemy import select, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import Users, OAuthSession
 from database import get_db
-from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
 import logging, os, string, secrets, uuid, hashlib, base64, urllib.parse, jwt
 
@@ -17,10 +17,6 @@ WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")
 API_URL = os.environ.get("API_URL")
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 JWT_ALGORITHM = "HS256"
-
-
-class IdToken(BaseModel):
-    idToken: str
 
 
 @router.post("/users/authenticate")
@@ -41,6 +37,7 @@ async def google_auth_status(
         user = result.scalar_one_or_none()
 
         if user is None:
+            # El usuario no existe en la base de datos
             auth_url, session_id = await _register_new_user(sub, db)
             return {
                 "status": "unauthenticated",
@@ -48,10 +45,23 @@ async def google_auth_status(
                 "session_id": session_id,
             }
 
+        # El usuario ya existe en la base de datos, pero tiene el JWT token vencido
         session_token = await _generate_session_token(user)
         return {"status": "authenticated", "session_token": session_token}
+    except ValueError:
+        logger.error("Invalid token")
+        raise HTTPException(status_code=400, detail="Token inválido.")
+    except GoogleAuthError:
+        logger.critical("Google auth error")
+        raise HTTPException(
+            status_code=400,
+            detail="Problemas en el servicio de Google. Reintentar más tarde.",
+        )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.critical(str(e))
+        raise HTTPException(
+            status_code=400, detail="Error desconocido. Reintentar más tarde."
+        )
 
 
 async def _register_new_user(sub: str, db: AsyncSession):
@@ -91,7 +101,7 @@ async def _register_new_user(sub: str, db: AsyncSession):
             sub=sub,
             code_verifier=code_verifier,
             state=state,
-            session_id=session_id,  # OJO A ESTO
+            session_id=session_id,
             status="pending",
             expires_at=expires_at,
         )

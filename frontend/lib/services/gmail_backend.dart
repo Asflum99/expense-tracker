@@ -20,6 +20,7 @@ class GmailBackend {
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         if (responseData.containsKey('auth_url')) {
+          // ESCENARIO 1: Usuario no está registrado en la base de datos. Comenzar flujo de registro.
           final sessionId = responseData['session_id'];
 
           await launchUrl(
@@ -30,11 +31,18 @@ class GmailBackend {
           final sessionToken = await _pollForAuthCompletion(sessionId);
           return Result.success(sessionToken);
         } else {
+          // ESCENARIO 2: Usuario ya estaba registrado en la base de datos, pero tenía el JWT token vencido
           final sessionToken = responseData['session_token'];
           return Result.success(sessionToken);
         }
       } else {
-        return Result.failure(Exception('Error de autenticación'));
+        try {
+          final Map<String, dynamic> errorData = jsonDecode(response.body);
+          final errorMessage = errorData['detail'] ?? 'Error desconocido';
+          return Result.failure(Exception(errorMessage));
+        } catch (e) {
+          return Result.failure(Exception(response.body));
+        }
       }
     } catch (e) {
       return Result.failure(Exception('$e'));
