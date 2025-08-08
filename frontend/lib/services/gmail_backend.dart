@@ -18,13 +18,12 @@ class GmailBackend {
       );
 
       if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        final String authUrl = responseData["auth_url"];
-        if (authUrl.isNotEmpty) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData.containsKey('auth_url')) {
           final sessionId = responseData['session_id'];
 
           await launchUrl(
-            Uri.parse(authUrl),
+            Uri.parse(responseData['auth_url']),
             mode: LaunchMode.externalApplication,
           );
 
