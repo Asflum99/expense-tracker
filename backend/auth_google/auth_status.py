@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token as id_token_verifier
-from google.auth.exceptions import GoogleAuthError
 from sqlalchemy import select, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import Users, OAuthSession

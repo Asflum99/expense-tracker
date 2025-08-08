@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from typing import Match, Any
 from datetime import datetime
 from sqlalchemy import update
-from backend.models import Users
+from models import Users
 import requests, os, re, base64, locale
 
 load_dotenv()

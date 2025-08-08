@@ -1,6 +1,6 @@
 from gmail.strategies.email_strategy_interface import EmailStrategy
 from dotenv import load_dotenv
-from backend.models import Users
+from models import Users
 from datetime import datetime
 from sqlalchemy import update
 from bs4 import BeautifulSoup
