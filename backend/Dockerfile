@@ -4,9 +4,12 @@ FROM python:3.13-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Establecer timezone ANTES de usarla
+ENV TZ=America/Lima
+
 WORKDIR /backend
 
-# Instalar dependencias del sistema y configurar locale en una sola capa
+# Instalar dependencias del sistema y configurar locale/timezone en una sola capa
 RUN apt-get update && apt-get install -y \
     tzdata \
     build-essential \
@@ -14,6 +17,8 @@ RUN apt-get update && apt-get install -y \
     && echo "es_PE.UTF-8 UTF-8" >> /etc/locale.gen \
     && locale-gen \
     && update-locale LANG=es_PE.UTF-8 \
+    && echo $TZ > /etc/timezone \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

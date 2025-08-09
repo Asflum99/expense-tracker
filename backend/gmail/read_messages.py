@@ -1,21 +1,21 @@
 from fastapi import HTTPException, APIRouter, Depends, Header
+from fastapi.responses import StreamingResponse
+from io import StringIO
 from datetime import datetime
 from logging import Logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database import get_db
-from gmail.strategies.email_strategy_interface import EmailStrategy
-from gmail.strategies.yape_email_strategy import YapeEmailStrategy
-from gmail.strategies.interbank_email_strategy import InterbankEmailStrategy
-from gmail.strategies.scotiabank_email_strategy import ScotiabankEmailStrategy
-from gmail.strategies.bcp_email_strategy import BcpEmailStrategy
+from gmail.strategies.interface import EmailStrategy
+from gmail.strategies.yape import YapeEmailStrategy
+from gmail.strategies.interbank import InterbankEmailStrategy
+from gmail.strategies.scotiabank import ScotiabankEmailStrategy
+from gmail.strategies.bcp import BcpEmailStrategy
 from models import Users
-from pathlib import Path
 from models import Beneficiaries
 from groq import Groq
-from helpers.csv_generator import generate_csv
 from sqlalchemy import insert
-import logging, os, jwt, tempfile, uuid
+import logging, os, jwt, io, csv
 
 
 router: APIRouter = APIRouter()
@@ -31,7 +31,7 @@ async def read_messages(
     authorization: str = Header(),
     device_time: str = Header(alias="Device-Time"),
     db: AsyncSession = Depends(get_db),
-) -> str:
+) -> StreamingResponse:
     try:
         if not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Invalid authorization header")
@@ -58,7 +58,13 @@ async def read_messages(
 
         list_processed = await process_messages(original_list, db)
 
-        return list_processed
+        csv_content = _generate_csv_content(list_processed)
+
+        return StreamingResponse(
+            io.StringIO(csv_content),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=gastos.csv"},
+        )
 
     except ValueError:
         logger.error("Token inválido")
@@ -68,32 +74,21 @@ async def read_messages(
         raise HTTPException(status_code=500, detail=f"Error desconocido.")
 
 
-async def process_messages(original_list, db: AsyncSession) -> str:
+async def process_messages(original_list, db: AsyncSession) -> list:
+    def load_prompt_template(file_path):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        full_path = os.path.join(current_dir, file_path)
+        with open(full_path, "r", encoding="utf-8") as file:
+            return file.read()
+
     def assign_category(obj):
         client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-        prompt = f"""
-        Eres un experto en categorización de transacciones bancarias.
-        Responde solo con una de las siguientes categorías:
-        Comida
-        Comestibles
-        Compras
-        Transporte
-        Entretenimiento
-        Facturas y tarifas
-        Regalos
-        Belleza
-        Trabajo
-        Viajes
-        Ingreso
+        prompt_template = load_prompt_template("categorization_prompt.md")
 
-        Tu tarea es analizar esta transacción y devolver la categoría más apropiada.
-        Transacción:
-        Monto: {obj["amount"]}
-        Beneficiario: {obj["beneficiary"]}
-
-        Responde solo con una de las categorías listadas arriba. No modifiques el nombre de la categoría.
-        """
+        prompt = prompt_template.format(
+            amount=obj["amount"], beneficiary=obj["beneficiary"]
+        )
 
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}], model="llama-3.1-8b-instant"
@@ -122,27 +117,14 @@ async def process_messages(original_list, db: AsyncSession) -> str:
             await db.commit()
             return category
 
-    def cleanup():
-        try:
-            if csv_path.exists():
-                csv_path.unlink()
-        except Exception as e:
-            print(f"Error cleaning up {csv_path}: {e}")
-
     try:
-        temp_dir = Path(tempfile.gettempdir())
-        temp_dir.mkdir(exist_ok=True)
-        csv_filename = f"gastos_{uuid.uuid4().hex}.csv"
-        csv_path = temp_dir / csv_filename
-
         for obj in original_list:
             category = await obtain_category(obj, db)
             obj["category"] = category
 
-        return generate_csv(original_list, str(csv_path))
+        return original_list
 
     except Exception as e:
-        cleanup()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -164,11 +146,11 @@ async def _get_tokens_by_sub(
     result = await db.execute(
         select(Users.access_token, Users.refresh_token).where(Users.sub == sub)
     )
-    tokens = result.fetchone()
-    if tokens:
+    if tokens := result.fetchone():
         return tokens[0], tokens[1]
     else:
-        return None, None
+        logger.error("No se encontraron tokens")
+        raise HTTPException(status_code=401, detail="No se encontraron tokens")
 
 
 async def _iterate_strategies(
@@ -179,7 +161,7 @@ async def _iterate_strategies(
         InterbankEmailStrategy(),
         YapeEmailStrategy(),
         ScotiabankEmailStrategy(),
-        BcpEmailStrategy(),
+        # Acá va el de BCP. Falta mejorar
     ]
 
     for strategy in strategies:
@@ -192,3 +174,26 @@ async def _iterate_strategies(
             movements_list.append(dicts)
 
     return movements_list
+
+
+def _generate_csv_content(data: list[dict]) -> str:
+    """Genera contenido CSV en memoria"""
+    output = StringIO()
+    keys = ["Date", "Amount", "Category", "Title", "Note", "Account"]
+
+    writer = csv.writer(output)
+    writer.writerow(keys)
+
+    for obj in data:
+        writer.writerow(
+            [
+                obj["date"],
+                obj["amount"],
+                obj["category"],
+                obj["title"],
+                obj["note"],
+                obj["account"],
+            ]
+        )
+
+    return output.getvalue()

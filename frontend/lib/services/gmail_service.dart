@@ -3,13 +3,16 @@ import 'dart:io';
 import 'package:expense_tracker/utils/result.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'dart:typed_data';
 
 class GmailService {
-  static Future<Result<String>> readMessages(String sessionToken) async {
+  static Future<Result<Uint8List>> readMessages(String sessionToken) async {
     try {
       // LÓGICA QUE MOVERÉ LUEGO
       final DateTime now = DateTime.now();
-      final String formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+      final String formattedDate = DateFormat(
+        'yyyy-MM-dd HH:mm:ss',
+      ).format(now);
       // LÓGICA QUE MOVERÉ LUEGO
 
       final String apiUrl = const String.fromEnvironment('API_URL');
@@ -17,13 +20,12 @@ class GmailService {
         Uri.parse('$apiUrl/gmail/read-messages'),
         headers: {
           'Authorization': 'Bearer $sessionToken',
-          'Content-Type': 'application/json',
-          'Device-Time': formattedDate
+          'Device-Time': formattedDate,
         },
       );
 
       if (response.statusCode == 200) {
-        return Result.success(response.body);
+        return Result.success(response.bodyBytes); // Cambio aquí
       } else {
         String errorDetail = "Server Error (${response.statusCode}): ";
         try {
@@ -32,7 +34,6 @@ class GmailService {
         } catch (e) {
           errorDetail += response.body;
         }
-
         return Result.failure(Exception(errorDetail));
       }
     } on SocketException {

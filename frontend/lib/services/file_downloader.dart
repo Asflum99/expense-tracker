@@ -1,23 +1,26 @@
+import 'package:downloadsfolder/downloadsfolder.dart';
 import 'package:expense_tracker/utils/result.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import 'dart:typed_data';
 
 class FileDownloader {
-  Future<Result<String>> downloadToDevice(String csvContent) async {
+  Future<Result<String>> downloadToDevice(Uint8List csvContent) async {
     try {
-      final Directory? downloadsDir = await getDownloadsDirectory();
       final fileName = _generateFileName();
+      Directory downloadDirectory = await getDownloadDirectory();
 
-      if (downloadsDir == null) {
-        return Result.failure(Exception("Carpeta de descargas no encontrada"));
+      if (!await downloadDirectory.exists()) {
+        return Result.failure(
+          Exception("No se pudo acceder a la carpeta de descargas"),
+        );
       }
 
-      final filePath = "${downloadsDir.path}/$fileName";
+      final filePath = "${downloadDirectory.path}/$fileName";
       final file = File(filePath);
 
-      await file.writeAsString(csvContent);
+      await file.writeAsBytes(csvContent);
 
       return Result.success("Archivo guardado en Descargas");
     } catch (e) {
