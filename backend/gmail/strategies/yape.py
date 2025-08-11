@@ -1,13 +1,15 @@
 from gmail.strategies.interface import EmailStrategy
 from datetime import datetime
+from bs4 import BeautifulSoup
 import requests, re, base64, logging
 
 logger = logging.getLogger(__name__)
 
-BENEFICIARY_PATTERN = r"Nombre del Beneficiario\s([^\r\n]+)"
+BENEFICIARY_PATTERN = r"Nombre del Beneficiario\s(.+?)\sN"
 DATE_PATTERN = r"(\d{1,2}\s\w+\s\d{4})\s-\s(\d{2}:\d{2}\s[ap]\.\sm\.)"
 BANK_EMAIL = "notificaciones@yape.pe"
 BANK_NAME = "BCP"
+YAPE_DATE_FORMAT = "%d %B %Y - %I:%M %p"
 
 
 class YapeEmailStrategy(EmailStrategy):
@@ -59,32 +61,24 @@ def _iterate_messages(
             f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
             headers=headers,
         )
-        full_message = message_response.json()
+        payload = message_response.json().get("payload", {})
+        message_body = self.get_html_body_data(payload)
 
-        message_body = (
-            full_message.get("payload", {})
-            .get("parts", [{}])[0]
-            .get("body", {})
-            .get("data")
-        )
-
-        cleaned_text = base64.urlsafe_b64decode(message_body).decode("utf-8")
+        text = base64.urlsafe_b64decode(message_body).decode("utf-8")
+        soup = BeautifulSoup(text, "lxml")
+        body_message_text = soup.get_text(separator=" ")
+        cleaned_text = " ".join(body_message_text.split())
 
         self.find_amount(cleaned_text, dict_to_send)
-        _find_date(cleaned_text, dict_to_send)
         self.find_beneficiary(cleaned_text, dict_to_send, BENEFICIARY_PATTERN)
+        _find_date(self, cleaned_text, dict_to_send)
         movements_list.append(dict_to_send)
 
 
-def _find_date(cleaned_text, dict_to_send):
-    date_regex = re.search(
-        DATE_PATTERN,
-        cleaned_text,
-    )
-
-    if date_regex:
+def _find_date(self: YapeEmailStrategy, cleaned_text, dict_to_send):
+    if date_regex := re.search(DATE_PATTERN, cleaned_text):
         date = date_regex.group()
         date = date.replace("a. m.", "AM").replace("p. m.", "PM")
-        dt = datetime.strptime(date, "%d %B %Y - %I:%M %p")
-        formatted = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
-        dict_to_send["date"] = formatted
+        self.format_date(date, YAPE_DATE_FORMAT, dict_to_send)
+    else:
+        dict_to_send["date"] = ""

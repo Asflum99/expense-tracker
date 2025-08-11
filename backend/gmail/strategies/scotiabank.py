@@ -11,6 +11,7 @@ BENEFICIARY_PATTERN = (
 )
 DATE_PATTERN = r"\d{1,2}\s\w+[,\.]+\s\d{2}:\d{2}\s[ap]m"
 BANK_NAME = "Scotiabank"
+SCOTIABANK_DATE_FORMAT = "%Y %d %b %I:%M %p"
 
 
 class ScotiabankEmailStrategy(EmailStrategy):
@@ -61,17 +62,10 @@ def _iterate_messages(
             f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
             headers=headers,
         )
-        full_message = message_response.json()
-
-        payload = full_message.get("payload", {})
-
-        message_body = (
-            payload.get("parts")[0]
-            .get("parts")[0]
-            .get("parts")[1]
-            .get("body")
-            .get("data")
-        )
+        payload = message_response.json().get("payload", {})
+        message_body = self.get_html_body_data(payload)
+        if message_body == "":
+            continue
 
         exact_year = _extract_year_from_headers(payload)
 
@@ -85,12 +79,12 @@ def _iterate_messages(
         cleaned_text = " ".join(body_message_text.split())
 
         self.find_amount(cleaned_text, dict_to_send)
-        _find_date(cleaned_text, dict_to_send, exact_year)
         self.find_beneficiary(
             cleaned_text,
             dict_to_send,
             BENEFICIARY_PATTERN,
         )
+        _find_date(self, cleaned_text, dict_to_send, exact_year)
         movements_list.append(dict_to_send)
 
 
@@ -109,18 +103,11 @@ def _extract_year_from_headers(payload):
     return year_match.group() if year_match else None
 
 
-def _find_date(cleaned_text, dict_to_send, exact_year):
-    date_regex = re.search(DATE_PATTERN, cleaned_text)
-
-    if date_regex:
-        date = date_regex.group()
-
-    # Transformar a la pedida por Cashew
-    date_complete = f"{exact_year} {date}"
-    clean_date = date_complete.replace(".", "").replace(",", "")
-
-    dt = datetime.strptime(clean_date, "%Y %d %b %I:%M %p")
-
-    real_time = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
-
-    dict_to_send["date"] = real_time
+def _find_date(self: ScotiabankEmailStrategy, cleaned_text, dict_to_send, exact_year):
+    if match := re.search(DATE_PATTERN, cleaned_text):
+        date = match.group()
+        date_complete = f"{exact_year} {date}"
+        clean_date = date_complete.replace(".", "").replace(",", "")
+        self.format_date(clean_date, SCOTIABANK_DATE_FORMAT, dict_to_send)
+    else:
+        dict_to_send["date"] = ""

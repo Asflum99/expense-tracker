@@ -5,10 +5,11 @@ import requests, re, base64, logging
 
 logger = logging.getLogger(__name__)
 
-BENEFICIARY_PATTERN = r"Destinatario:\s(.+?)\sDestino:"
-DATE_PATTERN = r"\d+\sde\s\w+\sde\s\d{4}\s-\s\d{2}:\d{2}"
+BENEFICIARY_PATTERN = r"Empresa\s(.+?)\sNúmero"
+DATE_PATTERN = r"\d+\sde\s\w+\sde\s\d{4}\s-\s\d{2}:\d{2}\s[AP]M"
 BANK_EMAIL = "notificaciones@notificacionesbcp.com.pe"
 BANK_NAME = "BCP"
+BCP_DATE_FORMAT = "%d de %B de %Y - %H:%M %p"
 
 
 class BcpEmailStrategy(EmailStrategy):
@@ -60,10 +61,8 @@ def _iterate_messages(
                 f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
                 headers=headers,
             )
-            full_message = message_response.json()
-            message_body = (
-                full_message.get("payload", {}).get("parts")[1].get("body").get("data")
-            )
+            payload = message_response.json().get("payload", {})
+            message_body = self.get_html_body_data(payload)
 
             message_body_decoded = base64.urlsafe_b64decode(
                 message_body + "=" * (-len(message_body) % 4)
@@ -75,23 +74,22 @@ def _iterate_messages(
 
             body_message_text = soup.get_text(separator=" ")
             cleaned_text = " ".join(body_message_text.split())
-            logger.info(cleaned_text)
 
-            self.find_amount(cleaned_text, dict_to_send)
-            _find_date(cleaned_text, dict_to_send)
-            self.find_beneficiary(cleaned_text, dict_to_send, BENEFICIARY_PATTERN)
+            # Correo de consumo con tarjeta BCP. Falta incluir los correos al hacer retiro, transferencia o yapeo desde la app de BCP.
+            if "Realizaste un consumo" in cleaned_text:
+                self.find_amount(cleaned_text, dict_to_send)
+                self.find_beneficiary(cleaned_text, dict_to_send, BENEFICIARY_PATTERN)
+                _find_date(self, cleaned_text, dict_to_send)
+            else:
+                continue
         except Exception:
             continue
         movements_list.append(dict_to_send)
 
 
-def _find_date(cleaned_text: str, dict_to_send):
-    date_regex = re.findall(DATE_PATTERN, cleaned_text)
-    if date_regex:
-        date = date_regex[0]
-        dt = datetime.strptime(date, "%d de %B de %Y - %H:%M")
-        formatted_time = datetime.strftime(dt, "%Y-%m-%d %H:%M:%S.%f")
-        dict_to_send["date"] = formatted_time
+def _find_date(self: BcpEmailStrategy, cleaned_text: str, dict_to_send):
+    if match := re.search(DATE_PATTERN, cleaned_text):
+        date = match.group()
+        self.format_date(date, BCP_DATE_FORMAT, dict_to_send)
     else:
-        # Handle the case where date_regex is empty
-        formatted_time = None
+        dict_to_send["date"] = ""

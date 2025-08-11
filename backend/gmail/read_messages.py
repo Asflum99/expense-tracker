@@ -1,10 +1,10 @@
 from fastapi import HTTPException, APIRouter, Depends, Header
 from fastapi.responses import StreamingResponse
 from io import StringIO
-from datetime import datetime
+from datetime import datetime, timedelta
 from logging import Logger
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, insert
 from database import get_db
 from gmail.strategies.interface import EmailStrategy
 from gmail.strategies.yape import YapeEmailStrategy
@@ -14,14 +14,16 @@ from gmail.strategies.bcp import BcpEmailStrategy
 from models import Users
 from models import Beneficiaries
 from groq import Groq
-from sqlalchemy import insert
 import logging, os, jwt, io, csv
 
 
 router: APIRouter = APIRouter()
-WEB_CLIENT_ID: str | None = os.environ.get("WEB_CLIENT_ID")
-JWT_SECRET_KEY: str | None = os.environ.get("JWT_SECRET_KEY")
+WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+AI_MODEL = "openai/gpt-oss-20b"
 JWT_ALGORITHM = "HS256"
+PROMPT_TEMPLATE = "categorization_prompt.md"
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -82,16 +84,16 @@ async def process_messages(original_list, db: AsyncSession) -> list:
             return file.read()
 
     def assign_category(obj):
-        client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+        client = Groq(api_key=GROQ_API_KEY)
 
-        prompt_template = load_prompt_template("categorization_prompt.md")
+        prompt_template = load_prompt_template(PROMPT_TEMPLATE)
 
         prompt = prompt_template.format(
             amount=obj["amount"], beneficiary=obj["beneficiary"]
         )
 
         chat_completion = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}], model="llama-3.1-8b-instant"
+            messages=[{"role": "user", "content": prompt}], model=AI_MODEL
         )
 
         return chat_completion.choices[0].message.content
@@ -131,7 +133,7 @@ async def process_messages(original_list, db: AsyncSession) -> list:
 def _get_time(device_time: str) -> tuple[int, int]:
     now = datetime.strptime(device_time, "%Y-%m-%d %H:%M:%S")
 
-    midnight_today: datetime = now.replace(hour=0, minute=0, second=0)
+    midnight_today = (now - timedelta(days=2)).replace(hour=0, minute=0, second=0)
 
     # Convertir a timestamps
     after: int = int(midnight_today.timestamp())
@@ -158,10 +160,10 @@ async def _iterate_strategies(
 ) -> list[dict]:
     movements_list: list[dict] = []
     strategies: list[EmailStrategy] = [
+        BcpEmailStrategy(),
         InterbankEmailStrategy(),
         YapeEmailStrategy(),
         ScotiabankEmailStrategy(),
-        # Acá va el de BCP. Falta mejorar
     ]
 
     for strategy in strategies:
