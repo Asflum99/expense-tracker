@@ -1,14 +1,15 @@
-from dotenv import load_dotenv
-
-load_dotenv()
+import locale
+import logging
+import os
+import platform
+import sys
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from auth_google import auth_status, oauth2callback, auth_check_status
-from gmail import read_messages
-from database import engine, Base
-from contextlib import asynccontextmanager
-import locale, logging, sys, os, platform
 
+from auth_google import auth_check_status, auth_status, oauth2callback
+from database import Base, engine
+from gmail import read_messages
 
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(

@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, func, UniqueConstraint
+from sqlalchemy import Column, DateTime, Integer, String, UniqueConstraint, func
+
 from database import Base
+
 
 class OAuthSession(Base):
     __tablename__ = "oauth_sessions"

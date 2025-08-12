@@ -1,13 +1,17 @@
-from fastapi import HTTPException, APIRouter, Depends
+import logging
+import os
+from typing import Optional
+
+import requests
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
-from models import OAuthSession, Users
-from database import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
-from pydantic import BaseModel
-from typing import Optional
-import logging, os, requests
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import get_db
+from models import OAuthSession, Users
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

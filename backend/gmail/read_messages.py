@@ -1,31 +1,35 @@
-from fastapi import HTTPException, APIRouter, Depends, Header
-from fastapi.responses import StreamingResponse
+import csv
+import io
+import logging
+import os
+from datetime import datetime
 from io import StringIO
-from datetime import datetime, timedelta
-from logging import Logger
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, insert
-from database import get_db
-from gmail.strategies.interface import EmailStrategy
-from gmail.strategies.yape import YapeEmailStrategy
-from gmail.strategies.interbank import InterbankEmailStrategy
-from gmail.strategies.scotiabank import ScotiabankEmailStrategy
-from gmail.strategies.bcp import BcpEmailStrategy
-from models import Users
-from models import Beneficiaries
-from groq import Groq
-import logging, os, jwt, io, csv
 
+import jwt
+from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import StreamingResponse
+from groq import Groq
+from sqlalchemy import insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import get_db
+from gmail.strategies.bcp import BcpEmailStrategy
+from gmail.strategies.interbank import InterbankEmailStrategy
+from gmail.strategies.interface import EmailStrategy
+from gmail.strategies.scotiabank import ScotiabankEmailStrategy
+from gmail.strategies.yape import YapeEmailStrategy
+from models import Beneficiaries, Users
+from config import Settings
 
 router: APIRouter = APIRouter()
-WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+WEB_CLIENT_ID = Settings.web_client_id
+JWT_SECRET_KEY = Settings.jwt_secret_key
+GROQ_API_KEY = Settings.groq_api_key
 AI_MODEL = "openai/gpt-oss-20b"
 JWT_ALGORITHM = "HS256"
 PROMPT_TEMPLATE = "categorization_prompt.md"
 
-logger: Logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @router.get("/gmail/read-messages")
@@ -35,69 +39,22 @@ async def read_messages(
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     try:
-        if not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="Invalid authorization header")
-
-        session_token = authorization.replace("Bearer ", "")
-
-        payload = jwt.decode(
-            session_token,
-            JWT_SECRET_KEY,
-            [JWT_ALGORITHM],
-        )
-
-        user_sub = payload.get("sub")
-
+        user_sub = _extract_user_sub(authorization)
         access_token, refresh_token = await _get_tokens_by_sub(user_sub, db)
-
-        headers: dict[str, str] = {"Authorization": f"Bearer {access_token}"}
-
         after, before = _get_time(device_time)
-
-        original_list = await _iterate_strategies(
-            after, before, refresh_token, user_sub, headers, db
+        messages = await _fetch_and_process_messages(
+            after, before, access_token, refresh_token, user_sub, db
         )
+        return _create_csv_response(messages)
 
-        list_processed = await process_messages(original_list, db)
-
-        csv_content = _generate_csv_content(list_processed)
-
-        return StreamingResponse(
-            io.StringIO(csv_content),
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=gastos.csv"},
-        )
-
-    except ValueError:
-        logger.error("Token inválido")
-        raise HTTPException(status_code=401, detail=f"Token inválido.")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.critical(f"Error desconocido: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error desconocido.")
+        raise HTTPException(status_code=500, detail="Error desconocido.")
 
 
-async def process_messages(original_list, db: AsyncSession) -> list:
-    def load_prompt_template(file_path):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        full_path = os.path.join(current_dir, file_path)
-        with open(full_path, "r", encoding="utf-8") as file:
-            return file.read()
-
-    def assign_category(obj):
-        client = Groq(api_key=GROQ_API_KEY)
-
-        prompt_template = load_prompt_template(PROMPT_TEMPLATE)
-
-        prompt = prompt_template.format(
-            amount=obj["amount"], beneficiary=obj["beneficiary"]
-        )
-
-        chat_completion = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}], model=AI_MODEL
-        )
-
-        return chat_completion.choices[0].message.content
-
+async def _process_messages(original_list, db: AsyncSession) -> list:
     async def obtain_category(obj, db: AsyncSession):
         try:
             result = await db.execute(
@@ -107,8 +64,9 @@ async def process_messages(original_list, db: AsyncSession) -> list:
             )
             beneficiary = result.scalar_one_or_none()
         except Exception as e:
-            print(f"DB error: {e}")
+            logger.error(f"DB error: {e}")
             raise
+
         if beneficiary is not None:
             return beneficiary
         else:
@@ -133,7 +91,7 @@ async def process_messages(original_list, db: AsyncSession) -> list:
 def _get_time(device_time: str) -> tuple[int, int]:
     now = datetime.strptime(device_time, "%Y-%m-%d %H:%M:%S")
 
-    midnight_today = (now - timedelta(days=2)).replace(hour=0, minute=0, second=0)
+    midnight_today = now.replace(hour=0, minute=0, second=0)
 
     # Convertir a timestamps
     after: int = int(midnight_today.timestamp())
@@ -199,3 +157,52 @@ def _generate_csv_content(data: list[dict]) -> str:
         )
 
     return output.getvalue()
+
+
+def load_prompt_template(file_path: str) -> str:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(current_dir, file_path)
+    with open(full_path, "r", encoding="utf-8") as file:
+        return file.read()
+
+
+def assign_category(obj: dict) -> str:
+    client = Groq(api_key=GROQ_API_KEY)
+    prompt_template = load_prompt_template(PROMPT_TEMPLATE)
+    prompt = prompt_template.format(
+        amount=obj["amount"], beneficiary=obj["beneficiary"]
+    )
+    chat_completion = client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}], model=AI_MODEL
+    )
+    if content := chat_completion.choices[0].message.content:
+        return content
+    else:
+        raise ValueError("Error al asignar categoría")
+
+
+def _extract_user_sub(authorization: str) -> str:
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    session_token = authorization.removeprefix("Bearer ")
+    payload = jwt.decode(session_token, JWT_SECRET_KEY, [JWT_ALGORITHM])
+    return payload.get("sub")
+
+
+async def _fetch_and_process_messages(
+    after, before, access_token, refresh_token, user_sub, db
+):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    original_list = await _iterate_strategies(
+        after, before, refresh_token, user_sub, headers, db
+    )
+    return await _process_messages(original_list, db)
+
+
+def _create_csv_response(processed_list):
+    csv_content = _generate_csv_content(processed_list)
+    return StreamingResponse(
+        io.StringIO(csv_content),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=gastos.csv"},
+    )

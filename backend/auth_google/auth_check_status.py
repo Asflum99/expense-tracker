@@ -1,10 +1,13 @@
-from fastapi import HTTPException, APIRouter, Depends
+import os
+from datetime import datetime, timedelta, timezone
+
+import jwt
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from database import get_db
 from models import OAuthSession, Users
-from sqlalchemy import select, delete
-from datetime import datetime, timedelta, timezone
-import jwt, os
 
 router = APIRouter()
 

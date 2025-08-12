@@ -1,21 +1,31 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
-from google.auth.transport.requests import Request as GoogleRequest
-from google.auth.exceptions import GoogleAuthError
-from google.oauth2 import id_token as id_token_verifier
-from sqlalchemy import select, insert
-from sqlalchemy.ext.asyncio import AsyncSession
-from models import Users, OAuthSession
-from database import get_db
+import base64
+import hashlib
+import logging
+import secrets
+import string
+import urllib.parse
+import uuid
 from datetime import datetime, timedelta, timezone
-import logging, os, string, secrets, uuid, hashlib, base64, urllib.parse, jwt
+
+import jwt
+from fastapi import APIRouter, Depends, Header, HTTPException
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request as GoogleRequest
+from google.oauth2 import id_token as id_token_verifier
+from sqlalchemy import insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import Settings
+from database import get_db
+from models import OAuthSession, Users
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
-WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")
-API_URL = os.environ.get("API_URL")
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+WEB_CLIENT_ID = Settings.web_client_id
+API_URL = Settings.api_url
+JWT_SECRET_KEY = Settings.jwt_secret_key
 JWT_ALGORITHM = "HS256"
 
 

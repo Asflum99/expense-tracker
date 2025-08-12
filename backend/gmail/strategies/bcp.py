@@ -1,7 +1,11 @@
-from gmail.strategies.interface import EmailStrategy
+import base64
+import logging
+import re
+
+import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
-import requests, re, base64, logging
+
+from gmail.strategies.interface import EmailStrategy
 
 logger = logging.getLogger(__name__)
 
