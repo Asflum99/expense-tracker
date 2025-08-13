@@ -56,7 +56,7 @@ async def google_auth_status(
             }
 
         # El usuario ya existe en la base de datos, pero tiene el JWT token vencido
-        session_token = await _generate_session_token(user)
+        session_token = _generate_session_token(user)
         return {"status": "authenticated", "session_token": session_token}
     except ValueError:
         logger.error("Invalid token")
@@ -128,7 +128,7 @@ async def _register_new_user(sub: str, db: AsyncSession):
     return auth_url, session_id
 
 
-async def _generate_session_token(user: Users) -> str:
+def _generate_session_token(user: Users) -> str:
     payload = {
         "sub": user.sub,
         "user_id": user.id,

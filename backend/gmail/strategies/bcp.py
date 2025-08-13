@@ -11,7 +11,7 @@ from gmail.strategies.interface import EmailStrategy
 logger = logging.getLogger(__name__)
 
 BENEFICIARY_PATTERN = r"Empresa\s(.+?)\sNúmero"
-DATE_PATTERN = r"\d+\sde\s\w+\sde\s\d{4}\s-\s\d{2}:\d{2}\s[AP]M"
+DATE_PATTERN = r"\d{1,2}\sde\s\w+\sde\s\d{4}\s-\s\d{2}:\d{2}\s[AP]M"
 BANK_EMAIL = "notificaciones@notificacionesbcp.com.pe"
 BANK_NAME = "BCP"
 BCP_DATE_FORMAT = "%d de %B de %Y - %H:%M %p"

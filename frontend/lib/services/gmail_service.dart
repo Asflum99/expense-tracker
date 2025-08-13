@@ -17,7 +17,7 @@ class GmailService {
 
       final String apiUrl = const String.fromEnvironment('API_URL');
       final response = await http.get(
-        Uri.parse('$apiUrl/gmail/read-messages'),
+        Uri.parse('$apiUrl/gmail/get-gmail-messages'),
         headers: {
           'Authorization': 'Bearer $sessionToken',
           'Device-Time': formattedDate,
@@ -27,14 +27,8 @@ class GmailService {
       if (response.statusCode == 200) {
         return Result.success(response.bodyBytes); // Cambio aquí
       } else {
-        String errorDetail = "Server Error (${response.statusCode}): ";
-        try {
-          final errorBody = jsonDecode(response.body);
-          errorDetail += errorBody['detail'] ?? response.body;
-        } catch (e) {
-          errorDetail += response.body;
-        }
-        return Result.failure(Exception(errorDetail));
+        final errorBody = jsonDecode(response.body);
+        return Result.failure(Exception(errorBody));
       }
     } on SocketException {
       return Result.failure(Exception("No hay conexión a internet."));

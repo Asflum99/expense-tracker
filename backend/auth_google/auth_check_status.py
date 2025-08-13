@@ -33,7 +33,7 @@ async def check_auth_status(session_id: str, db: AsyncSession = Depends(get_db))
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        session_token = await _generate_session_token(user)
+        session_token = _generate_session_token(user)
 
         await db.execute(
             delete(OAuthSession).where(OAuthSession.session_id == session_id)
@@ -45,7 +45,7 @@ async def check_auth_status(session_id: str, db: AsyncSession = Depends(get_db))
     raise HTTPException(status_code=202, detail="Authentication pending")
 
 
-async def _generate_session_token(user: Users) -> str:
+def _generate_session_token(user: Users) -> str:
     payload = {
         "sub": user.sub,
         "user_id": user.id,
