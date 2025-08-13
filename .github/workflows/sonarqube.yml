@@ -18,6 +18,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Instalar Flutter
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+
+      # Descargar dependencias
+      - name: Get dependencies
+        run: |
+          cd frontend
+          flutter pub get
+
       # Análisis SonarQube
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
