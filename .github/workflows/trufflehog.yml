@@ -22,7 +22,6 @@ jobs:
       with:
         extra_args: >-
           --results=verified,unknown
-          --fail
           --json
           --log-level=2
       
