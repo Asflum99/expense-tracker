@@ -1,83 +1,116 @@
-.env
-.venv
-mock.json
-*.pyc
-*.csv
-.vscode
-dev_tools/
-__pycache__/
-pyrefly.toml
-.mypy_cache/
+# ==============================================
+# EXPENSE TRACKER - GITIGNORE
+# ==============================================
 
-# Android Studio
-frontend/*.iml
-frontend/.gradle
-frontend/local.properties
-frontend/.idea
+# ==============================================
+# GENERAL / OS
+# ==============================================
 .DS_Store
-apikeys.properties
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.swp
+.atom/
+.history
+.svn/
 
-# Build
-frontend/build
-frontend/app/build
+# ==============================================
+# VS CODE
+# ==============================================
+.vscode/
+
+# ==============================================
+# PYTHON / FASTAPI (Backend)
+# ==============================================
+# Environment
+.env
+.env.local
+.env.production
+.venv
+venv/
+
+# Python compiled
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+**/__pycache__/
+
+# Python specific
+.Python
+pip-log.txt
+.coverage
+.pytest_cache/
+.mypy_cache/
+.tox/
 
 # Logs
 *.log
 
-# OS-specific
-Thumbs.db
-ehthumbs.db
-Desktop.ini
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Development tools
+dev_tools/
+pyrefly.toml
+
+# Custom files
+mock.json
+*.csv
+
+# ==============================================
+# FLUTTER / DART (Frontend)
+# ==============================================
+# Flutter/Dart/Pub related
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.pub-cache/
+frontend/.pub/
+frontend/build/
+frontend/**/doc/api/
+frontend/**/ios/Flutter/.last_build_id
+frontend/migrate_working_dir/
+
+# Build artifacts
+frontend/android/app/debug/
+frontend/android/app/profile/
+frontend/android/app/release/
+
+# Symbolication and obfuscation
+frontend/app.*.symbols
+frontend/app.*.map.json
+
+# ==============================================
+# ANDROID STUDIO / IntelliJ
+# ==============================================
+frontend/*.iml
+frontend/.gradle/
+frontend/local.properties
+frontend/.idea/
+*.ipr
+*.iws
+apikeys.properties
 
 # Kotlin specific
 *.class
 
-# Jetpack Compose previews
-.compose-cache
+# Jetpack Compose
+.compose-cache/
 
-# Flutter
-# Miscellaneous
-.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+# ==============================================
+# DOCKER
+# ==============================================
+.dockerignore.local
+docker-compose.override.yml
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# ==============================================
+# SECRETS & SENSITIVE DATA
+# ==============================================
+secrets/
+config/secrets.json
+*.pem
+*.key
+!docker/ssl/*.key.example

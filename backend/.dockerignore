@@ -1,8 +1,36 @@
+# Archivos y carpetas de Python
 __pycache__/
 *.pyo
 *.pyc
 *.pyd
+*.pdb
+*.egg-info/
+.eggs/
+
+# Entornos virtuales
 .venv/
-.env
+venv/
+env/
+
+# Archivos de sistema
 .DS_Store
+Thumbs.db
+
+# Git
 .git
+.gitignore
+
+# Configuración local / IDEs
+.vscode/
+.idea/
+
+# Archivos sensibles
+.env
+*.env
+*.key
+*.pem
+*.crt
+
+# Logs y temporales
+*.log
+tmp/

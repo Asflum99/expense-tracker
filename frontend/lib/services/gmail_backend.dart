@@ -1,94 +1,71 @@
 import 'package:expense_tracker/utils/result.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 
-sealed class AuthStatus {}
-
-class Authenticated extends AuthStatus {}
-
-class Unauthenticated extends AuthStatus {}
-
-class Error extends AuthStatus {
-  final String message;
-  Error(this.message);
-}
-
 class GmailBackend {
-  final apiUrl = dotenv.get("API_URL");
-  Future<Result<String>> setupGmailAccess(String idToken) async {
+  final String apiUrl = const String.fromEnvironment('API_URL');
+  Future<Result<String>> authenticateUserComplete(String idToken) async {
     try {
-      final status = await _isUserAlreadyAuth(idToken);
-      return switch (status) {
-        Authenticated() => Result.success("authenticated"),
-        Unauthenticated() => await _authNewUser(idToken),
-        Error(message: final msg) => Result.failure(Exception(msg)),
-      };
-    } catch (e) {
-      return Result.failure(Exception("$e"));
-    }
-  }
+      final url = Uri.parse('$apiUrl/users/authenticate');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $idToken',
+        },
+      );
 
-  Future<Result<String>> _authNewUser(String idToken) async {
-    try {
-      final response = await _getHttpResponse(idToken, 'google');
-      final responseData = jsonDecode(response.body);
-      final authUrl = responseData['auth_url'];
-      final sessionId = responseData['session_id'];
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        if (responseData.containsKey('auth_url')) {
+          // ESCENARIO 1: Usuario no está registrado en la base de datos. Comenzar flujo de registro.
+          final sessionId = responseData['session_id'];
 
-      launchUrl(Uri.parse(authUrl), mode: LaunchMode.externalApplication);
+          await launchUrl(
+            Uri.parse(responseData['auth_url']),
+            mode: LaunchMode.externalApplication,
+          );
 
-      // Polling cada 2 segundos
-      for (int i = 0; i < 60; i++) {
-        // 2 minutos máximo
-        await Future.delayed(Duration(seconds: 2));
-
-        final statusResponse = await http.get(
-          Uri.parse('$apiUrl/users/auth/status/$sessionId'),
-        );
-
-        if (statusResponse.statusCode == 200) {
-          final status = jsonDecode(statusResponse.body)['status'];
-
-          if (status == 'completed') {
-            return Result.success('authenticated');
-          }
+          final sessionToken = await _pollForAuthCompletion(sessionId);
+          return Result.success(sessionToken);
+        } else {
+          // ESCENARIO 2: Usuario ya estaba registrado en la base de datos, pero tenía el JWT token vencido
+          final sessionToken = responseData['session_token'];
+          return Result.success(sessionToken);
+        }
+      } else {
+        try {
+          final Map<String, dynamic> errorData = jsonDecode(response.body);
+          final errorMessage = errorData['detail'] ?? 'Error desconocido';
+          return Result.failure(Exception(errorMessage));
+        } catch (e) {
+          return Result.failure(Exception(response.body));
         }
       }
-
-      return Result.failure(Exception('Timeout de autenticación'));
     } catch (e) {
       return Result.failure(Exception('$e'));
     }
   }
 
-  Future<AuthStatus> _isUserAlreadyAuth(String idToken) async {
-    final response = await _getHttpResponse(idToken, "status");
+  Future<String> _pollForAuthCompletion(String sessionId) async {
+    for (int i = 0; i < 60; i++) {
+      await Future.delayed(Duration(seconds: 2));
 
-    try {
-      final responseBody = jsonDecode(response.body);
-      final success = responseBody["authenticated"];
-      if (success) {
-        return Authenticated();
-      } else {
-        return Unauthenticated();
+      final statusResponse = await http.get(
+        Uri.parse('$apiUrl/users/auth/status/$sessionId'),
+      );
+
+      if (statusResponse.statusCode == 200) {
+        final statusData = jsonDecode(statusResponse.body);
+
+        if (statusData['status'] == 'completed') {
+          return statusData['session_token'];
+        }
       }
-    } catch (e) {
-      return Error("Revise su conexión a internet e intente de nuevo.");
     }
-  }
 
-  Future<http.Response> _getHttpResponse(String idToken, String task) async {
-    final body = jsonEncode({"id_token": idToken});
-
-    final url = Uri.parse('$apiUrl/users/auth/$task');
-
-    return http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: body,
-    );
+    throw Exception('Timeout de autenticación');
   }
 }

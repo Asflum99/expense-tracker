@@ -1,16 +1,18 @@
-from fastapi import HTTPException, APIRouter, Depends
-from fastapi.responses import HTMLResponse
-from dotenv import load_dotenv
-from backend.models import OAuthSession, Users
-from database import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, update
-from sqlalchemy.dialects.postgresql import insert
-from pydantic import BaseModel
+import logging
+import os
 from typing import Optional
-import logging, os, requests
 
-load_dotenv()
+import requests
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import get_db
+from models import OAuthSession, Users
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")

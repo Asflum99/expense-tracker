@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:expense_tracker/services/gmail_access_manager.dart';
-import 'package:expense_tracker/services/gmail_expense_sync_manager.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'services/google_auth_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:expense_tracker/services/gmail_expense_sync_manager.dart';
+import 'package:media_store_plus/media_store_plus.dart';
+
+final mediaStorePlugin = MediaStore();
 
 Future main() async {
   tz.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('America/Lima'));
-  await dotenv.load(fileName: ".env");
+  WidgetsFlutterBinding.ensureInitialized();
+  await MediaStore.ensureInitialized();
+  MediaStore.appFolder = "Gastos";
+
   runApp(const ExpenseTrackerApp());
 }
 
@@ -37,22 +44,48 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  void _authenticateAndSetup() async {
-    final tokenResult = await GmailAccessManager.authenticateAndSetup();
+  bool _isLoading = false;
+  String? _sessionToken;
 
-    if (!mounted) return;
+  @override
+  void initState() {
+    super.initState();
+    _loadStoredToken();
+  }
 
-    if (tokenResult.isFailure) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("${tokenResult.exceptionOrNull()}")),
-      );
-      return;
+  Future<void> _loadStoredToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    _sessionToken = prefs.getString('session_token');
+  }
+
+  void _handleRegisterExpenses() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    if (_sessionToken != null && await _isTokenValid(_sessionToken!)) {
+      _navigateToExpenseRegistration();
+    } else {
+      await _authenticateAndSetup();
     }
+  }
 
-    final idToken = tokenResult.getOrNull();
+  Future<bool> _isTokenValid(String token) async {
+    try {
+      final parts = token.split('.');
+      final payload = json.decode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      final exp = payload['exp'] * 1000;
+      return DateTime.now().millisecondsSinceEpoch < exp;
+    } catch (e) {
+      return false;
+    }
+  }
 
+  void _navigateToExpenseRegistration() async {
     final syncResult = await GmailExpenseSyncManager.syncAndDownloadExpenses(
-      idToken!,
+      _sessionToken!,
     );
 
     if (!mounted) return;
@@ -62,34 +95,74 @@ class _HomePageState extends State<HomePage> {
         SnackBar(content: Text("${syncResult.exceptionOrNull()}")),
       );
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(syncResult.getOrNull()!)));
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("CSV guardado en la carpeta Descargas")),
+      );
     }
+  }
+
+  Future<void> _authenticateAndSetup() async {
+    final authResult = await GoogleAuthHandler.authenticationAndSetupAccess();
+
+    if (!mounted) return;
+
+    if (authResult.isFailure) {
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${authResult.exceptionOrNull()}")),
+      );
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = authResult.getOrNull()!;
+    await prefs.setString('session_token', token);
+
+    setState(() {
+      _sessionToken = token;
+    });
+
+    _navigateToExpenseRegistration();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 300),
-              child: ElevatedButton(
-                onPressed: _authenticateAndSetup,
-                style: ButtonStyle(
-                  foregroundColor: WidgetStateProperty.all(Colors.black),
-                  backgroundColor: WidgetStateProperty.all(
-                    const Color.fromARGB(255, 223, 223, 223),
+      body: Stack(
+        children: [
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 300),
+                  child: ElevatedButton(
+                    onPressed: _handleRegisterExpenses,
+                    style: ButtonStyle(
+                      foregroundColor: WidgetStateProperty.all(Colors.black),
+                      backgroundColor: WidgetStateProperty.all(
+                        const Color.fromARGB(255, 223, 223, 223),
+                      ),
+                    ),
+                    child: const Text("Registrar gastos"),
                   ),
                 ),
-                child: const Text("Registrar gastos"),
+              ],
+            ),
+          ),
+          if (_isLoading)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 220),
+                child: const CircularProgressIndicator(),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
