@@ -10,8 +10,8 @@ def get_time_range(device_time: str):
         time_midnight_today = time_now.replace(hour=0, minute=0, second=0)
 
         # Convertir a timestamps
-        midnight_today = str(time_midnight_today.timestamp())
-        now = str(time_now.timestamp())
+        midnight_today = str(int(time_midnight_today.timestamp()))
+        now = str(int(time_now.timestamp()))
 
         return midnight_today, now
     except Exception as e:

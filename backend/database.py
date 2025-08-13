@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-from config import Settings
+from config import settings
 
-DATABASE_URL = Settings.database_url
+DATABASE_URL = settings.database_url
 if not DATABASE_URL:
     raise RuntimeError("No se configuró la variable de entorno para DATABASE_URL")
 
@@ -13,7 +13,7 @@ if DATABASE_URL.startswith("postgres://"):
 if "sslmode=" in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace("sslmode=", "ssl=")
 
-echo_value = Settings.sqlalchemy_echo
+echo_value = settings.sqlalchemy_echo
 
 engine = create_async_engine(DATABASE_URL, echo=echo_value)
 

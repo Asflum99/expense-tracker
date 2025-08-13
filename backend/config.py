@@ -19,3 +19,6 @@ class Settings(BaseSettings):
     jwt_secret_key: str
 
     model_config = {"env_file": ".env"}
+
+
+settings = Settings()

@@ -17,7 +17,7 @@ class GmailService {
 
       final String apiUrl = const String.fromEnvironment('API_URL');
       final response = await http.get(
-        Uri.parse('$apiUrl/gmail/get-gmail-messages'),
+        Uri.parse('$apiUrl/gmail/messages'),
         headers: {
           'Authorization': 'Bearer $sessionToken',
           'Device-Time': formattedDate,

@@ -15,7 +15,7 @@ router: APIRouter = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/gmail/get-gmail-messages")
+@router.get("/gmail/messages")
 async def get_gmail_messages(
     authorization: str = Header(),
     device_time: str = Header(alias="Device-Time"),

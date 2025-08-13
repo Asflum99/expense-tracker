@@ -6,10 +6,10 @@ from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import Settings
+from config import settings
 from models import Users
 
-JWT_SECRET_KEY = Settings.jwt_secret_key
+JWT_SECRET_KEY = settings.jwt_secret_key
 JWT_ALGORITHM = "HS256"
 
 logger = logging.getLogger(__name__)

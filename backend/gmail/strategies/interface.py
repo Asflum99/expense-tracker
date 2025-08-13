@@ -12,16 +12,18 @@ from tenacity import (
     wait_exponential,
 )
 
-from config import Settings
+from config import settings
 from models import Users
 
-WEB_CLIENT_ID = Settings.web_client_id
-CLIENT_SECRET = Settings.client_secret
+WEB_CLIENT_ID = settings.web_client_id
+CLIENT_SECRET = settings.client_secret
 AMOUNT_PATTERN = r"S\/\s*(\d+\.?\d{0,2})"
 FORMAT_TIME = "%Y-%m-%d %H:%M:%S.%f"  # Formato que pide Cashew
 
 
 class EmailStrategy(ABC):
+    BANK_NAME = ""
+
     @abstractmethod
     async def read_messages(
         self,
@@ -33,6 +35,17 @@ class EmailStrategy(ABC):
         db: AsyncSession,
     ) -> list[dict[str, float | str]]:
         pass
+
+    def create_movement_dict(self) -> dict[str, float | str]:
+        return {
+            "date": "",
+            "amount": 0.0,
+            "category": "",
+            "title": "",
+            "note": "",
+            "beneficiary": "",
+            "account": self.BANK_NAME,
+        }
 
     async def search_by_date_range(
         self,

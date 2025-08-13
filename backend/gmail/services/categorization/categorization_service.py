@@ -4,11 +4,11 @@ import os
 import requests
 from groq import APIError, AuthenticationError, Groq, RateLimitError
 
-from config import Settings
+from config import settings
 
 logger = logging.getLogger(__name__)
 
-GROQ_API_KEY = Settings.groq_api_key
+GROQ_API_KEY = settings.groq_api_key
 PROMPT_TEMPLATE = "categorization_prompt.md"
 AI_MODEL = "openai/gpt-oss-20b"
 

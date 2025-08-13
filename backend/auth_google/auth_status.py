@@ -15,7 +15,7 @@ from google.oauth2 import id_token as id_token_verifier
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import Settings
+from config import settings
 from database import get_db
 from models import OAuthSession, Users
 
@@ -23,9 +23,9 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
-WEB_CLIENT_ID = Settings.web_client_id
-API_URL = Settings.api_url
-JWT_SECRET_KEY = Settings.jwt_secret_key
+WEB_CLIENT_ID = settings.web_client_id
+API_URL = settings.api_url
+JWT_SECRET_KEY = settings.jwt_secret_key
 JWT_ALGORITHM = "HS256"
 
 

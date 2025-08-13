@@ -13,11 +13,12 @@ logger = logging.getLogger(__name__)
 BENEFICIARY_PATTERN = r"Nombre del Beneficiario\s(.+?)\sN"
 DATE_PATTERN = r"(\d{1,2}\s\w+\s\d{4})\s-\s(\d{2}:\d{2}\s[ap]\.\sm\.)"
 BANK_EMAIL = "notificaciones@yape.pe"
-BANK_NAME = "BCP"
 YAPE_DATE_FORMAT = "%d %B %Y - %I:%M %p"
 
 
 class YapeEmailStrategy(EmailStrategy):
+    BANK_NAME = "BCP"
+
     async def read_messages(
         self, midnight_today, now, refresh_token, sub, headers, db
     ) -> list[dict[str, float | str]]:
@@ -56,15 +57,7 @@ async def _iterate_messages(
     async with httpx.AsyncClient() as client:
         for message in messages_list:
             try:
-                dict_to_send: dict[str, float | str] = {
-                    "date": "",
-                    "amount": 0.0,
-                    "category": "",
-                    "title": "",
-                    "note": "",
-                    "beneficiary": "",
-                    "account": BANK_NAME,
-                }
+                dict_to_send = self.create_movement_dict()
                 message_id = message["id"]
                 message_response = await client.get(
                     f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
@@ -83,16 +76,25 @@ async def _iterate_messages(
                 _find_date(self, cleaned_text, dict_to_send)
                 movements_list.append(dict_to_send)
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                logger.warning(f"Network error processing message {message.get('id', 'unknown')}: {e}")
+                logger.warning(
+                    f"Network error processing message {message.get('id', 'unknown')}: {e}"
+                )
                 continue
             except (UnicodeDecodeError, binascii.Error) as e:
-                logger.warning(f"Decode error processing message {message.get('id', 'unknown')}: {e}")
+                logger.warning(
+                    f"Decode error processing message {message.get('id', 'unknown')}: {e}"
+                )
                 continue
             except Exception as e:
-                logger.error(f"Unexpected error processing message {message.get('id', 'unknown')}: {e}")
+                logger.error(
+                    f"Unexpected error processing message {message.get('id', 'unknown')}: {e}"
+                )
                 continue
 
-def _find_date(self: YapeEmailStrategy, cleaned_text: str, dict_to_send: dict[str, float | str]):
+
+def _find_date(
+    self: YapeEmailStrategy, cleaned_text: str, dict_to_send: dict[str, float | str]
+):
     if date_regex := re.search(DATE_PATTERN, cleaned_text):
         date = date_regex.group()
         date = date.replace("a. m.", "AM").replace("p. m.", "PM")
