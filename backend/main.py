@@ -9,7 +9,7 @@ from fastapi import FastAPI
 
 from auth_google import auth_check_status, auth_status, oauth2callback
 from database import Base, engine
-from gmail import read_messages
+from gmail.endpoints import messages
 
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
@@ -63,4 +63,4 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(auth_check_status.router)
 app.include_router(auth_status.router)
 app.include_router(oauth2callback.router)
-app.include_router(read_messages.router)
+app.include_router(messages.router)

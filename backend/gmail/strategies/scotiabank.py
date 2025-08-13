@@ -1,8 +1,9 @@
 import base64
+import binascii
 import logging
 import re
 
-import requests
+import httpx
 from bs4 import BeautifulSoup
 
 from gmail.strategies.interface import EmailStrategy
@@ -19,28 +20,28 @@ SCOTIABANK_DATE_FORMAT = "%Y %d %b %I:%M %p"
 
 
 class ScotiabankEmailStrategy(EmailStrategy):
-    async def process_messages(
-        self, after, before, refresh_token, sub, headers, db
-    ) -> list[dict]:
+    async def read_messages(
+        self, midnight_today, now, refresh_token, sub, headers, db
+    ) -> list[dict[str, float | str]]:
         try:
-            search_response = await self.ask_google(
+            search_response = await self.search_by_date_range(
                 BANK_EMAIL,
-                after,
-                before,
+                midnight_today,
+                now,
                 refresh_token,
                 db,
                 sub,
                 headers,
             )
 
-            movements_list: list[dict] = []
+            movements_list: list[dict[str, float | str]] = []
 
-            messages_list: list[dict] = search_response.json().get("messages", [])
+            messages_list: list = search_response.json().get("messages", [])
 
             if not messages_list:
                 return []
 
-            _iterate_messages(self, messages_list, headers, movements_list)
+            await _iterate_messages(self, messages_list, headers, movements_list)
 
             return movements_list
         except Exception as e:
@@ -48,48 +49,62 @@ class ScotiabankEmailStrategy(EmailStrategy):
             return []
 
 
-def _iterate_messages(
-    self: ScotiabankEmailStrategy, messages_list, headers, movements_list: list[dict]
+async def _iterate_messages(
+    self: ScotiabankEmailStrategy,
+    messages_list,
+    headers: dict[str, str],
+    movements_list: list[dict[str, float | str]],
 ):
-    for message in messages_list:
-        dict_to_send: dict[str, float | str] = {
-            "date": "",
-            "amount": 0.0,
-            "category": "",
-            "title": "",
-            "note": "",
-            "beneficiary": "",
-            "account": BANK_NAME,
-        }
-        message_id = message["id"]
-        message_response = requests.get(
-            f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
-            headers=headers,
-        )
-        payload = message_response.json().get("payload", {})
-        message_body = self.get_html_body_data(payload)
-        if message_body == "":
-            continue
+    async with httpx.AsyncClient() as client:
+        for message in messages_list:
+            try:
+                dict_to_send: dict[str, float | str] = {
+                    "date": "",
+                    "amount": 0.0,
+                    "category": "",
+                    "title": "",
+                    "note": "",
+                    "beneficiary": "",
+                    "account": BANK_NAME,
+                }
+                message_id = message["id"]
+                message_response = await client.get(
+                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
+                    headers=headers,
+                )
+                payload = message_response.json().get("payload", {})
+                message_body = self.get_html_body_data(payload)
+                if message_body == "":
+                    continue
 
-        exact_year = _extract_year_from_headers(payload)
+                exact_year = _extract_year_from_headers(payload)
 
-        message_body_decoded = base64.urlsafe_b64decode(
-            message_body + "=" * (-len(message_body) % 4)
-        )
-        decoded_html = message_body_decoded.decode("utf-8")
+                message_body_decoded = base64.urlsafe_b64decode(
+                    message_body + "=" * (-len(message_body) % 4)
+                )
+                decoded_html = message_body_decoded.decode("utf-8")
 
-        soup = BeautifulSoup(decoded_html, "lxml")
-        body_message_text = soup.get_text(separator=" ")
-        cleaned_text = " ".join(body_message_text.split())
+                soup = BeautifulSoup(decoded_html, "lxml")
+                body_message_text = soup.get_text(separator=" ")
+                cleaned_text = " ".join(body_message_text.split())
 
-        self.find_amount(cleaned_text, dict_to_send)
-        self.find_beneficiary(
-            cleaned_text,
-            dict_to_send,
-            BENEFICIARY_PATTERN,
-        )
-        _find_date(self, cleaned_text, dict_to_send, exact_year)
-        movements_list.append(dict_to_send)
+                self.find_amount(cleaned_text, dict_to_send)
+                self.find_beneficiary(
+                    cleaned_text,
+                    dict_to_send,
+                    BENEFICIARY_PATTERN,
+                )
+                _find_date(self, cleaned_text, dict_to_send, exact_year)
+                movements_list.append(dict_to_send)
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                logger.warning(f"Network error processing message {message.get('id', 'unknown')}: {e}")
+                continue
+            except (UnicodeDecodeError, binascii.Error) as e:
+                logger.warning(f"Decode error processing message {message.get('id', 'unknown')}: {e}")
+                continue
+            except Exception as e:
+                logger.error(f"Unexpected error processing message {message.get('id', 'unknown')}: {e}")
+                continue
 
 
 def _extract_year_from_headers(payload):
@@ -107,7 +122,7 @@ def _extract_year_from_headers(payload):
     return year_match.group() if year_match else None
 
 
-def _find_date(self: ScotiabankEmailStrategy, cleaned_text, dict_to_send, exact_year):
+def _find_date(self: ScotiabankEmailStrategy, cleaned_text: str, dict_to_send: dict[str, float | str], exact_year):
     if match := re.search(DATE_PATTERN, cleaned_text):
         date = match.group()
         date_complete = f"{exact_year} {date}"

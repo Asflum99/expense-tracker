@@ -1,4 +1,3 @@
-import os
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -13,46 +12,47 @@ from tenacity import (
     wait_exponential,
 )
 
+from config import Settings
 from models import Users
 
-WEB_CLIENT_ID = os.environ.get("WEB_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+WEB_CLIENT_ID = Settings.web_client_id
+CLIENT_SECRET = Settings.client_secret
 AMOUNT_PATTERN = r"S\/\s*(\d+\.?\d{0,2})"
 FORMAT_TIME = "%Y-%m-%d %H:%M:%S.%f"  # Formato que pide Cashew
 
 
 class EmailStrategy(ABC):
     @abstractmethod
-    async def process_messages(
+    async def read_messages(
         self,
-        after: str,
-        before: str,
+        midnight_today: str,
+        now: str,
         refresh_token: str,
         sub: str,
-        headers: dict,
+        headers: dict[str, str],
         db: AsyncSession,
-    ) -> list[dict]:
+    ) -> list[dict[str, float | str]]:
         pass
 
-    async def ask_google(
+    async def search_by_date_range(
         self,
         bank_email: str,
-        after: str,
-        before: str,
+        midnight_today: str,
+        now: str,
         refresh_token: str,
         db: AsyncSession,
         sub: str,
-        headers: dict,
+        headers: dict[str, str],
     ) -> httpx.Response:
-        query = f"(from:{bank_email} after:{after} before:{before})"
-        return await self.search_messages(query, headers, refresh_token, db, sub)
+        query = f"(from:{bank_email} after:{midnight_today} before:{now})"
+        return await self.gmail_search(query, headers, refresh_token, db, sub)
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
     )
-    async def search_messages(
+    async def gmail_search(
         self, query: str, headers: dict, refresh_token: str, db: AsyncSession, sub: str
     ) -> httpx.Response:
         async with httpx.AsyncClient() as client:
@@ -98,21 +98,25 @@ class EmailStrategy(ABC):
 
             headers["Authorization"] = f"Bearer {access_token}"
 
-    def find_amount(self, cleaned_text: str, dict_to_send: dict) -> None:
+    def find_amount(
+        self, cleaned_text: str, dict_to_send: dict[str, float | str]
+    ) -> None:
         if match := re.search(AMOUNT_PATTERN, cleaned_text):
             dict_to_send["amount"] = -float(match.group(1))
         else:
             dict_to_send["amount"] = 0
 
     def find_beneficiary(
-        self, cleaned_text: str, dict_to_send: dict, pattern: str
+        self, cleaned_text: str, dict_to_send: dict[str, float | str], pattern: str
     ) -> None:
         if match := re.search(pattern, cleaned_text):
             dict_to_send["beneficiary"] = match.group(1)
         else:
             dict_to_send["beneficiary"] = ""
 
-    def format_date(self, date, date_format, dict_to_send):
+    def format_date(
+        self, date: str, date_format: str, dict_to_send: dict[str, float | str]
+    ):
         dt = datetime.strptime(date, date_format)
         formatted_time = dt.strftime(FORMAT_TIME)
         dict_to_send["date"] = formatted_time
