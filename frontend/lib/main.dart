@@ -5,10 +5,16 @@ import 'services/google_auth_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:expense_tracker/services/gmail_expense_sync_manager.dart';
+import 'package:media_store_plus/media_store_plus.dart';
+
+final mediaStorePlugin = MediaStore();
 
 Future main() async {
   tz.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('America/Lima'));
+  WidgetsFlutterBinding.ensureInitialized();
+  await MediaStore.ensureInitialized();
+  MediaStore.appFolder = "Gastos";
 
   runApp(const ExpenseTrackerApp());
 }
